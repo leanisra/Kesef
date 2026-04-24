@@ -2,30 +2,34 @@ import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
 import CajaClient from './CajaClient'
 
-export default async function CajaPage({ params }: { params: { obraId: string } }) {
+export const revalidate = 0
+
+export default async function CajaPage({ params, searchParams }: { params: { obraId: string }, searchParams: { op?: string } }) {
   const { obraId } = await params
+  const opPreseleccionada = searchParams?.op || null
 
   const { data: cajas } = await supabase
-    .from('cajas')
-    .select('*')
-    .eq('obra_id', obraId)
-    .order('nombre')
+    .from('cajas').select('*').eq('obra_id', obraId).order('nombre')
 
   const { data: movimientos } = await supabase
-    .from('movimientos_caja')
-    .select('*')
-    .eq('obra_id', obraId)
+    .from('movimientos_caja').select('*').eq('obra_id', obraId)
     .order('fecha', { ascending: false })
 
-  const { data: tc } = await supabase
-    .from('tipos_cambio')
-    .select('*')
-    .order('fecha', { ascending: false })
-    .limit(1)
-    .single()
+  const { data: ordenesPendientes } = await supabase
+    .from('ordenes_pago')
+    .select('*, certificados(numero, descripcion, notas, proveedores(razon_social))')
+    .eq('obra_id', obraId).eq('estado', 'emitida').order('numero')
 
-  const cajasSeguras = cajas ?? []
-  const movimientosSeguras = movimientos ?? []
+  const { data: cheques } = await supabase
+    .from('cheques').select('*, proveedores(razon_social)')
+    .eq('obra_id', obraId).order('fecha_vencimiento', { ascending: true })
+
+  const { data: proveedoresObra } = await supabase
+    .from('proveedores_obras').select('proveedor_id').eq('obra_id', obraId)
+
+  const proveedorIds = proveedoresObra?.map(p => p.proveedor_id) || []
+  const { data: proveedores } = await supabase
+    .from('proveedores').select('id, razon_social').in('id', proveedorIds)
 
   return (
     <main style={{ minHeight: '100vh', background: '#0E1117', color: '#E8EDF5', fontFamily: 'system-ui, sans-serif', padding: '40px' }}>
@@ -35,22 +39,22 @@ export default async function CajaPage({ params }: { params: { obraId: string } 
             ← Volver a Guatemala 5934
           </Link>
         </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28 }}>
-          <div>
-            <h1 style={{ fontSize: 26, fontWeight: 700, marginBottom: 4 }}>💰 Caja</h1>
-            <p style={{ color: '#556070', fontSize: 14 }}>Movimientos bimonetarios · Guatemala 5934</p>
-          </div>
-          <div style={{ background: '#161B25', border: '1px solid #252D3D', borderRadius: 8, padding: '8px 16px', fontSize: 13 }}>
-            <span style={{ color: '#556070' }}>TC Blue hoy · </span>
-            <span style={{ color: '#F0C060', fontFamily: 'monospace', fontWeight: 600 }}>
-              $ {tc?.promedio?.toLocaleString('es-AR') ?? '—'}
-            </span>
-          </div>
+        <div style={{ marginBottom: 28 }}>
+          <h1 style={{ fontSize: 26, fontWeight: 700, marginBottom: 4 }}>💰 Caja</h1>
+          <p style={{ color: '#556070', fontSize: 14 }}>Movimientos · Cheques · Guatemala 5934</p>
         </div>
-        {cajasSeguras.length === 0 ? (
-          <div style={{ color: '#556070', padding: 40 }}>No hay cajas configuradas para esta obra.</div>
+        {(cajas?.length ?? 0) === 0 ? (
+          <div style={{ color: '#556070', padding: 40 }}>No hay cajas configuradas.</div>
         ) : (
-          <CajaClient cajas={cajasSeguras} movimientosIniciales={movimientosSeguras} obraId={obraId} tcHoy={tc?.promedio ?? 1415} />
+          <CajaClient
+            cajas={cajas || []}
+            movimientosIniciales={movimientos || []}
+            obraId={obraId}
+            ordenesPendientes={ordenesPendientes || []}
+            chequesIniciales={cheques || []}
+            proveedores={proveedores || []}
+            opPreseleccionada={opPreseleccionada}
+          />
         )}
       </div>
     </main>
