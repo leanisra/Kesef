@@ -489,7 +489,7 @@ const [ordenSeleccionada, setOrdenSeleccionada] = useState<string>(opPreseleccio
                           {c.estado === 'emitido' && (
                             confirmCambio?.id === c.id ? (
                               <div style={{ display: 'flex', gap: 4 }}>
-                                <button onClick={() => cambiarEstadoCheque(c.id, confirmCambio.estado)} style={{ background: '#16a34a', color: '#fff', border: 'none', borderRadius: 4, fontSize: 10, padding: '3px 8px', cursor: 'pointer' }}>Sí</button>
+                                <button onClick={() => cambiarEstadoCheque(c.id, confirmCambio!.estado)} style={{ background: '#16a34a', color: '#fff', border: 'none', borderRadius: 4, fontSize: 10, padding: '3px 8px', cursor: 'pointer' }}>Sí</button>
                                 <button onClick={() => setConfirmCambio(null)} style={{ background: '#252D3D', color: '#8A96AA', border: 'none', borderRadius: 4, fontSize: 10, padding: '3px 8px', cursor: 'pointer' }}>No</button>
                               </div>
                             ) : (
