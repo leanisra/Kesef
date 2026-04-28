@@ -20,11 +20,11 @@ const PISOS = ['SS','PB','1','2','3','4','5','6','7','8','9','10','Terraza']
 const ESTADOS = ['disponible','reservado','vendido']
 
 const inputStyle = {
-  width: '100%', background: '#0E1117', border: '1px solid #2E3A52',
-  borderRadius: 6, padding: '7px 10px', color: '#E8EDF5',
+  width: '100%', background: 'var(--input-bg)', border: '1px solid var(--border)',
+  borderRadius: 6, padding: '7px 10px', color: 'var(--text-primary)',
   fontFamily: 'monospace', fontSize: 13, outline: 'none'
 }
-const labelStyle = { fontSize: 11, color: '#556070', marginBottom: 4, display: 'block' as const }
+const labelStyle = { fontSize: 11, color: 'var(--text-muted)', marginBottom: 4, display: 'block' as const }
 
 export default function UnidadesClient({ unidadesIniciales, obraId }: { unidadesIniciales: any[], obraId: string }) {
   const [unidades, setUnidades] = useState(unidadesIniciales)
@@ -57,9 +57,7 @@ export default function UnidadesClient({ unidadesIniciales, obraId }: { unidades
     setGuardando(true)
     const antes = unidades.find(u => u.id === editando.id)
     const despues = {
-      piso: editando.piso,
-      codigo: editando.codigo,
-      tipo: editando.tipo,
+      piso: editando.piso, codigo: editando.codigo, tipo: editando.tipo,
       m2_cubierta: parseFloat(editando.m2_cubierta) || 0,
       m2_semi: parseFloat(editando.m2_semi) || 0,
       m2_descubierto: parseFloat(editando.m2_descubierto) || 0,
@@ -155,8 +153,8 @@ export default function UnidadesClient({ unidadesIniciales, obraId }: { unidades
           { label: 'Disponibles', valor: disponibles, color: '#60A5FA' },
           { label: 'Reservadas', valor: unidades.filter(u => u.estado === 'reservado').length, color: '#F59E0B' },
         ].map(k => (
-          <div key={k.label} style={{ background: '#161B25', border: '1px solid #252D3D', borderRadius: 10, padding: '14px 18px' }}>
-            <div style={{ fontSize: 11, color: '#556070', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>{k.label}</div>
+          <div key={k.label} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, padding: '14px 18px' }}>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>{k.label}</div>
             <div style={{ fontSize: 24, fontWeight: 700, color: k.color }}>{k.valor}</div>
           </div>
         ))}
@@ -165,29 +163,29 @@ export default function UnidadesClient({ unidadesIniciales, obraId }: { unidades
       {/* Botones */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginBottom: 16 }}>
         <button onClick={() => { setVerHistorial(v => !v); cargarHistorial() }} style={{
-          background: 'transparent', color: '#8A96AA', border: '1px solid #2E3A52',
+          background: 'transparent', color: 'var(--text-secondary)', border: '1px solid var(--border)',
           borderRadius: 6, padding: '8px 18px', fontSize: 13, cursor: 'pointer', fontFamily: 'system-ui'
         }}>📋 {verHistorial ? 'Ocultar historial' : 'Ver historial'}</button>
         <button onClick={() => setModalNueva(true)} style={{
-          background: '#D4A843', color: '#0E1117', border: 'none', borderRadius: 6,
+          background: 'var(--accent)', color: 'var(--accent-contrast)', border: 'none', borderRadius: 6,
           padding: '8px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'system-ui'
         }}>＋ Agregar unidad</button>
       </div>
 
       {/* Historial */}
       {verHistorial && (
-        <div style={{ background: '#161B25', border: '1px solid #252D3D', borderRadius: 10, padding: 20, marginBottom: 20 }}>
+        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, padding: 20, marginBottom: 20 }}>
           <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 14 }}>📋 Historial de cambios</div>
           {historial.length === 0
-            ? <div style={{ color: '#556070', fontSize: 13 }}>No hay cambios registrados todavía.</div>
+            ? <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No hay cambios registrados todavía.</div>
             : historial.map((h, i) => (
-              <div key={h.id} style={{ display: 'flex', gap: 14, padding: '10px 0', borderBottom: i < historial.length - 1 ? '1px solid #252D3D' : 'none', alignItems: 'flex-start' }}>
+              <div key={h.id} style={{ display: 'flex', gap: 14, padding: '10px 0', borderBottom: i < historial.length - 1 ? '1px solid var(--border)' : 'none', alignItems: 'flex-start' }}>
                 <span style={{ fontSize: 18 }}>
                   {h.accion === 'creacion' ? '✅' : h.accion === 'eliminacion' ? '🗑️' : '✏️'}
                 </span>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, color: '#E8EDF5' }}>{h.descripcion}</div>
-                  <div style={{ fontSize: 11, color: '#556070', marginTop: 2 }}>
+                  <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>{h.descripcion}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
                     {new Date(h.created_at).toLocaleString('es-AR')}
                   </div>
                 </div>
@@ -205,15 +203,15 @@ export default function UnidadesClient({ unidadesIniciales, obraId }: { unidades
       )}
 
       {/* Tabla */}
-      <div style={{ background: '#161B25', border: '1px solid #252D3D', borderRadius: 10, overflow: 'hidden' }}>
-        <div style={{ padding: '12px 18px', borderBottom: '1px solid #252D3D', fontSize: 12, color: '#556070' }}>
+      <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
+        <div style={{ padding: '12px 18px', borderBottom: '1px solid var(--border)', fontSize: 12, color: 'var(--text-muted)' }}>
           ✏️ para editar · ✕ para eliminar (se puede restaurar desde el historial)
         </div>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
-            <tr style={{ background: '#1D2535' }}>
+            <tr style={{ background: 'var(--bg-table-head)' }}>
               {['Piso','Código','Tipo','M² cub.','M² semi','USD/m²','Total USD','Estado',''].map(h => (
-                <th key={h} style={{ padding: '9px 12px', textAlign: 'left', fontSize: 11, color: '#556070', fontWeight: 500, textTransform: 'uppercase', letterSpacing: 0.5 }}>{h}</th>
+                <th key={h} style={{ padding: '9px 12px', textAlign: 'left', fontSize: 11, color: 'var(--text-muted)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: 0.5 }}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -222,12 +220,12 @@ export default function UnidadesClient({ unidadesIniciales, obraId }: { unidades
               const total = precioTotal(u)
               const st = estadoColor[u.estado] || estadoColor.disponible
               return (
-                <tr key={u.id} style={{ borderTop: '1px solid #252D3D', background: idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)' }}>
-                  <td style={{ padding: '8px 12px', fontFamily: 'monospace', color: '#556070', fontSize: 12 }}>{u.piso}</td>
+                <tr key={u.id} style={{ borderTop: '1px solid var(--border)', background: idx % 2 === 0 ? 'transparent' : 'var(--row-alt)' }}>
+                  <td style={{ padding: '8px 12px', fontFamily: 'monospace', color: 'var(--text-muted)', fontSize: 12 }}>{u.piso}</td>
                   <td style={{ padding: '8px 12px', fontWeight: 500 }}>{u.codigo}</td>
-                  <td style={{ padding: '8px 12px', color: '#8A96AA', fontSize: 13 }}>{u.tipo || '—'}</td>
+                  <td style={{ padding: '8px 12px', color: 'var(--text-secondary)', fontSize: 13 }}>{u.tipo || '—'}</td>
                   <td style={{ padding: '8px 12px', fontFamily: 'monospace', fontSize: 12 }}>{u.m2_cubierta}</td>
-                  <td style={{ padding: '8px 12px', fontFamily: 'monospace', fontSize: 12, color: '#556070' }}>{u.m2_semi || '—'}</td>
+                  <td style={{ padding: '8px 12px', fontFamily: 'monospace', fontSize: 12, color: 'var(--text-muted)' }}>{u.m2_semi || '—'}</td>
                   <td style={{ padding: '8px 12px', fontFamily: 'monospace', color: '#F0C060', fontSize: 12 }}>
                     {u.precio_m2_usd > 0 ? `USD ${fmt(u.precio_m2_usd)}` : '—'}
                   </td>
@@ -245,7 +243,7 @@ export default function UnidadesClient({ unidadesIniciales, obraId }: { unidades
                     {confirmDel === u.id
                       ? <>
                           <button onClick={() => eliminar(u.id)} style={{ background: '#EF4444', color: '#fff', border: 'none', borderRadius: 3, fontSize: 10, padding: '2px 6px', cursor: 'pointer', marginRight: 4 }}>Sí</button>
-                          <button onClick={() => setConfirmDel(null)} style={{ background: '#252D3D', color: '#8A96AA', border: 'none', borderRadius: 3, fontSize: 10, padding: '2px 6px', cursor: 'pointer' }}>No</button>
+                          <button onClick={() => setConfirmDel(null)} style={{ background: 'var(--border)', color: 'var(--text-secondary)', border: 'none', borderRadius: 3, fontSize: 10, padding: '2px 6px', cursor: 'pointer' }}>No</button>
                         </>
                       : <button onClick={() => setConfirmDel(u.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, opacity: 0.3, color: '#F87171' }}
                           onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
@@ -262,7 +260,7 @@ export default function UnidadesClient({ unidadesIniciales, obraId }: { unidades
       {/* Modal edición */}
       {editando && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 }}>
-          <div style={{ background: '#161B25', border: '1px solid #2E3A52', borderRadius: 12, padding: 28, width: 520, maxWidth: '90vw' }}>
+          <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12, padding: 28, width: 520, maxWidth: '90vw' }}>
             <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 20 }}>Editar · {editando.codigo}</h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
               <div>
@@ -303,8 +301,8 @@ export default function UnidadesClient({ unidadesIniciales, obraId }: { unidades
               </div>
             </div>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-              <button onClick={() => setEditando(null)} style={{ background: 'transparent', color: '#8A96AA', border: '1px solid #2E3A52', borderRadius: 6, padding: '8px 16px', fontSize: 13, cursor: 'pointer', fontFamily: 'system-ui' }}>Cancelar</button>
-              <button onClick={guardarEdicion} disabled={guardando} style={{ background: '#D4A843', color: '#0E1117', border: 'none', borderRadius: 6, padding: '8px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'system-ui' }}>
+              <button onClick={() => setEditando(null)} style={{ background: 'transparent', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 6, padding: '8px 16px', fontSize: 13, cursor: 'pointer', fontFamily: 'system-ui' }}>Cancelar</button>
+              <button onClick={guardarEdicion} disabled={guardando} style={{ background: 'var(--accent)', color: 'var(--accent-contrast)', border: 'none', borderRadius: 6, padding: '8px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'system-ui' }}>
                 {guardando ? 'Guardando...' : '✓ Guardar'}
               </button>
             </div>
@@ -315,7 +313,7 @@ export default function UnidadesClient({ unidadesIniciales, obraId }: { unidades
       {/* Modal nueva */}
       {modalNueva && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 }}>
-          <div style={{ background: '#161B25', border: '1px solid #2E3A52', borderRadius: 12, padding: 28, width: 520, maxWidth: '90vw' }}>
+          <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12, padding: 28, width: 520, maxWidth: '90vw' }}>
             <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 20 }}>Nueva unidad</h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
               <div>
@@ -342,7 +340,8 @@ export default function UnidadesClient({ unidadesIniciales, obraId }: { unidades
               </div>
               <div>
                 <label style={labelStyle}>M² descubiertos</label>
-                <input type="number" value={nueva.m2_descubierto} onChange={e => setNueva(n => ({ ...n, m2_descubierto: e.target.value }))} style={inputStyle} placeholder="0" />
+                <input type="number" value={nueva.m2_descubierto} onChange={e => setNueva(n => ({ ...n, m2_descubierto: e.target.value }))} style=
+{inputStyle} placeholder="0" />
               </div>
               <div>
                 <label style={labelStyle}>Precio USD/m²</label>
@@ -356,8 +355,8 @@ export default function UnidadesClient({ unidadesIniciales, obraId }: { unidades
               </div>
             </div>
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-              <button onClick={() => setModalNueva(false)} style={{ background: 'transparent', color: '#8A96AA', border: '1px solid #2E3A52', borderRadius: 6, padding: '8px 16px', fontSize: 13, cursor: 'pointer', fontFamily: 'system-ui' }}>Cancelar</button>
-              <button onClick={agregarNueva} disabled={guardando} style={{ background: '#D4A843', color: '#0E1117', border: 'none', borderRadius: 6, padding: '8px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'system-ui' }}>
+              <button onClick={() => setModalNueva(false)} style={{ background: 'transparent', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 6, padding: '8px 16px', fontSize: 13, cursor: 'pointer', fontFamily: 'system-ui' }}>Cancelar</button>
+              <button onClick={agregarNueva} disabled={guardando} style={{ background: 'var(--accent)', color: 'var(--accent-contrast)', border: 'none', borderRadius: 6, padding: '8px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'system-ui' }}>
                 {guardando ? 'Guardando...' : '✓ Agregar'}
               </button>
             </div>

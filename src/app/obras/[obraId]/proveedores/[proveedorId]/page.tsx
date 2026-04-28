@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
 import ProveedorClient from './ProveedorClient'
+import { ThemeToggle } from '@/lib/ThemeToggle'
 
 export const revalidate = 0
 
@@ -32,20 +33,21 @@ export default async function ProveedorPage({ params }: { params: { obraId: stri
     .eq('obra_id', obraId)
     .order('orden')
 
-  if (!proveedor) return <div style={{ color: 'white', padding: 40 }}>Proveedor no encontrado</div>
+  if (!proveedor) return <div style={{ color: 'var(--text-primary)', padding: 40 }}>Proveedor no encontrado</div>
 
   return (
-    <main style={{ minHeight: '100vh', background: '#0E1117', color: '#E8EDF5', fontFamily: 'system-ui, sans-serif', padding: '40px' }}>
+    <main style={{ minHeight: '100vh', background: 'var(--bg-main)', color: 'var(--text-primary)', fontFamily: 'system-ui, sans-serif', padding: '40px' }}>
       <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-        <div style={{ marginBottom: 8 }}>
-          <Link href={`/obras/${obraId}/proveedores`} style={{ color: '#556070', fontSize: 13, textDecoration: 'none' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <Link href={`/obras/${obraId}/proveedores`} style={{ color: 'var(--text-muted)', fontSize: 13, textDecoration: 'none' }}>
             ← Volver a proveedores
           </Link>
+          <ThemeToggle />
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 }}>
           <div>
             <h1 style={{ fontSize: 26, fontWeight: 700, marginBottom: 4 }}>{proveedor.razon_social}</h1>
-            <div style={{ color: '#556070', fontSize: 13 }}>
+            <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>
               {proveedor.rubro} · CUIT {proveedor.cuit || '—'}
             </div>
           </div>

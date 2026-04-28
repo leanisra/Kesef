@@ -12,11 +12,11 @@ const diasHasta = (fecha: string) => {
 }
 
 const inputStyle = {
-  width: '100%', background: '#0E1117', border: '1px solid #2E3A52',
-  borderRadius: 6, padding: '8px 12px', color: '#E8EDF5',
+  width: '100%', background: 'var(--input-bg)', border: '1px solid var(--border)',
+  borderRadius: 6, padding: '8px 12px', color: 'var(--text-primary)',
   fontFamily: 'system-ui', fontSize: 13, outline: 'none'
 }
-const labelStyle = { fontSize: 11, color: '#556070', marginBottom: 4, display: 'block' as const }
+const labelStyle = { fontSize: 11, color: 'var(--text-muted)', marginBottom: 4, display: 'block' as const }
 
 export default function CajaClient({ cajas, movimientosIniciales, obraId, ordenesPendientes, chequesIniciales, proveedores, opPreseleccionada }: {
   cajas: any[], movimientosIniciales: any[], obraId: string, ordenesPendientes: any[], chequesIniciales: any[], proveedores: any[], opPreseleccionada?: string | null
@@ -28,7 +28,7 @@ export default function CajaClient({ cajas, movimientosIniciales, obraId, ordene
   const [tab, setTab] = useState<'movimientos'|'nuevo'|'cheques'|'nuevo_cheque'>(opPreseleccionada ? 'nuevo' : 'movimientos')
   const [guardando, setGuardando] = useState(false)
   const [mensaje, setMensaje] = useState('')
-const [ordenSeleccionada, setOrdenSeleccionada] = useState<string>(opPreseleccionada || '')
+  const [ordenSeleccionada, setOrdenSeleccionada] = useState<string>(opPreseleccionada || '')
   const [tcHoy, setTcHoy] = useState<number>(1415)
   const [tcLabel, setTcLabel] = useState<string>('cargando...')
   const [filtroEstado, setFiltroEstado] = useState('todos')
@@ -187,14 +187,14 @@ const [ordenSeleccionada, setOrdenSeleccionada] = useState<string>(opPreseleccio
     emitido:    { bg: 'rgba(245,158,11,0.12)', text: '#F59E0B' },
     depositado: { bg: 'rgba(34,197,94,0.12)',  text: '#4ADE80' },
     rechazado:  { bg: 'rgba(239,68,68,0.12)',  text: '#F87171' },
-    anulado:    { bg: 'rgba(255,255,255,0.06)', text: '#556070' },
+    anulado:    { bg: 'var(--tag-bg)',          text: 'var(--text-muted)' },
   }
 
   const OrdenDetalle = ({ ordenId }: { ordenId: string }) => {
     const o = ordenes.find(x => x.id === ordenId)
     if (!o) return null
     return (
-      <div style={{ marginTop: 8, background: 'rgba(212,168,67,0.08)', border: '1px solid rgba(212,168,67,0.2)', borderRadius: 6, padding: '8px 12px', fontSize: 12, color: '#F0C060' }}>
+      <div style={{ marginTop: 8, background: 'var(--accent-bg)', border: '1px solid var(--accent-border)', borderRadius: 6, padding: '8px 12px', fontSize: 12, color: '#F0C060' }}>
         {o.monto_transfer > 0 && <div>Transferencia: $ {fmt(o.monto_transfer)}</div>}
         {o.monto_efectivo > 0 && <div>Efectivo: $ {fmt(o.monto_efectivo)}</div>}
         {o.monto_cheque > 0 && <div>Cheque: $ {fmt(o.monto_cheque)}</div>}
@@ -204,7 +204,7 @@ const [ordenSeleccionada, setOrdenSeleccionada] = useState<string>(opPreseleccio
 
   const SelectorOrdenes = ({ value, onChange }: { value: string, onChange: (id: string) => void }) => (
     <>
-      <select value={value} onChange={e => onChange(e.target.value)} style={{ ...inputStyle, borderColor: value ? '#D4A843' : '#2E3A52', color: value ? '#F0C060' : '#E8EDF5' }}>
+      <select value={value} onChange={e => onChange(e.target.value)} style={{ ...inputStyle, borderColor: value ? 'var(--accent)' : 'var(--border)', color: value ? '#F0C060' : 'var(--text-primary)' }}>
         <option value="">— Seleccioná una orden de pago —</option>
         {ordenes.map(o => {
           const proveedor = o.certificados?.proveedores?.razon_social || ''
@@ -228,8 +228,8 @@ const [ordenSeleccionada, setOrdenSeleccionada] = useState<string>(opPreseleccio
 
       {/* TC Blue */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
-        <div style={{ background: '#161B25', border: '1px solid #252D3D', borderRadius: 8, padding: '8px 16px', fontSize: 13 }}>
-          <span style={{ color: '#556070' }}>TC Blue hoy · </span>
+        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 16px', fontSize: 13 }}>
+          <span style={{ color: 'var(--text-muted)' }}>TC Blue hoy · </span>
           <span style={{ color: '#F0C060', fontFamily: 'monospace', fontWeight: 600 }}>{tcLabel}</span>
         </div>
       </div>
@@ -240,7 +240,7 @@ const [ordenSeleccionada, setOrdenSeleccionada] = useState<string>(opPreseleccio
           <span style={{ fontSize: 18 }}>🚨</span>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 13, fontWeight: 600, color: '#F87171' }}>{chequesVencidos.length} cheque{chequesVencidos.length > 1 ? 's' : ''} vencido{chequesVencidos.length > 1 ? 's' : ''} sin depositar</div>
-            <div style={{ fontSize: 12, color: '#556070', marginTop: 2 }}>{chequesVencidos.map(c => `N°${c.numero} · $ ${fmt(c.monto)}`).join(' · ')}</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{chequesVencidos.map(c => `N°${c.numero} · $ ${fmt(c.monto)}`).join(' · ')}</div>
           </div>
           <button onClick={() => setTab('cheques')} style={{ background: 'rgba(239,68,68,0.15)', color: '#F87171', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 6, padding: '5px 12px', fontSize: 12, cursor: 'pointer', fontFamily: 'system-ui' }}>Ver →</button>
         </div>
@@ -250,7 +250,7 @@ const [ordenSeleccionada, setOrdenSeleccionada] = useState<string>(opPreseleccio
           <span style={{ fontSize: 18 }}>⚠️</span>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 13, fontWeight: 600, color: '#F59E0B' }}>{chequesVencenProximo.length} cheque{chequesVencenProximo.length > 1 ? 's' : ''} vence{chequesVencenProximo.length > 1 ? 'n' : ''} en 7 días</div>
-            <div style={{ fontSize: 12, color: '#556070', marginTop: 2 }}>{chequesVencenProximo.map(c => `N°${c.numero} · vence ${c.fecha_vencimiento}`).join(' · ')}</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{chequesVencenProximo.map(c => `N°${c.numero} · vence ${c.fecha_vencimiento}`).join(' · ')}</div>
           </div>
           <button onClick={() => setTab('cheques')} style={{ background: 'rgba(245,158,11,0.1)', color: '#F59E0B', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 6, padding: '5px 12px', fontSize: 12, cursor: 'pointer', fontFamily: 'system-ui' }}>Ver →</button>
         </div>
@@ -265,15 +265,15 @@ const [ordenSeleccionada, setOrdenSeleccionada] = useState<string>(opPreseleccio
           const activa = cajaActiva === cj.id
           return (
             <div key={cj.id} onClick={() => { setCajaActiva(cj.id); setOrdenSeleccionada('') }} style={{
-              background: '#161B25', border: `1px solid ${activa ? '#D4A843' : '#252D3D'}`,
-              boxShadow: activa ? '0 0 0 1px #D4A843' : 'none',
+              background: 'var(--bg-card)', border: `1px solid ${activa ? 'var(--accent)' : 'var(--border)'}`,
+              boxShadow: activa ? '0 0 0 1px var(--accent)' : 'none',
               borderRadius: 10, padding: '16px 20px', cursor: 'pointer'
             }}>
-              <div style={{ fontSize: 11, color: '#556070', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>Caja {cj.nombre}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>Caja {cj.nombre}</div>
               <div style={{ fontSize: 22, fontWeight: 700, fontFamily: 'monospace', color: '#F0C060' }}>
                 {cj.moneda === 'ARS' ? `$ ${fmt(saldoARS)}` : `USD ${fmt(saldoUSD)}`}
               </div>
-              <div style={{ fontSize: 11, color: '#556070', marginTop: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
                 <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#F59E0B', display: 'inline-block' }} />
                 {cj.nombre.includes('Banco') ? 'Galicia · actualización manual' : 'Carga manual'}
               </div>
@@ -289,14 +289,14 @@ const [ordenSeleccionada, setOrdenSeleccionada] = useState<string>(opPreseleccio
           <div style={{ flex: 1, fontSize: 13, color: '#F59E0B' }}>
             {ordenes.length} {ordenes.length === 1 ? 'orden de pago pendiente' : 'órdenes de pago pendientes'} de registrar en caja
           </div>
-          <button onClick={() => setTab('nuevo')} style={{ background: '#D4A843', color: '#0E1117', border: 'none', borderRadius: 6, padding: '6px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'system-ui' }}>
+          <button onClick={() => setTab('nuevo')} style={{ background: 'var(--accent)', color: 'var(--accent-contrast)', border: 'none', borderRadius: 6, padding: '6px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'system-ui' }}>
             Registrar ahora →
           </button>
         </div>
       )}
 
       {/* Tabs */}
-      <div style={{ display: 'flex', borderBottom: '1px solid #252D3D', marginBottom: 24 }}>
+      <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: 24 }}>
         {[
           { key: 'movimientos', label: `Movimientos · ${movsFiltrados.length}` },
           { key: 'nuevo', label: '＋ Nuevo movimiento' },
@@ -305,7 +305,7 @@ const [ordenSeleccionada, setOrdenSeleccionada] = useState<string>(opPreseleccio
         ].map(t => (
           <div key={t.key} onClick={() => setTab(t.key as any)} style={{
             padding: '10px 18px', fontSize: 13, fontWeight: 500, cursor: 'pointer',
-            color: tab === t.key ? '#F0C060' : '#556070',
+            color: tab === t.key ? '#F0C060' : 'var(--text-muted)',
             borderBottom: `2px solid ${tab === t.key ? '#F0C060' : 'transparent'}`,
           }}>{t.label}</div>
         ))}
@@ -320,36 +320,36 @@ const [ordenSeleccionada, setOrdenSeleccionada] = useState<string>(opPreseleccio
               { label: 'Egresos', valor: egresos, color: '#F87171' },
               { label: 'Neto', valor: ingresos - egresos, color: ingresos - egresos >= 0 ? '#4ADE80' : '#F87171' },
             ].map(k => (
-              <div key={k.label} style={{ background: '#161B25', border: '1px solid #252D3D', borderRadius: 8, padding: '12px 18px', flex: 1 }}>
-                <div style={{ fontSize: 10, color: '#556070', textTransform: 'uppercase', letterSpacing: 1 }}>{k.label}</div>
+              <div key={k.label} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, padding: '12px 18px', flex: 1 }}>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1 }}>{k.label}</div>
                 <div style={{ fontSize: 18, fontWeight: 700, fontFamily: 'monospace', color: k.color, marginTop: 4 }}>
                   {k.valor >= 0 ? '' : '-'}$ {fmt(Math.abs(k.valor))}
                 </div>
               </div>
             ))}
           </div>
-          <div style={{ background: '#161B25', border: '1px solid #252D3D', borderRadius: 10, overflow: 'hidden' }}>
+          <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
-                <tr style={{ background: '#1D2535' }}>
+                <tr style={{ background: 'var(--bg-table-head)' }}>
                   {['Fecha','Concepto','Contraparte','Ingreso','Egreso'].map(h => (
-                    <th key={h} style={{ padding: '9px 14px', textAlign: 'left', fontSize: 11, color: '#556070', fontWeight: 500, textTransform: 'uppercase', letterSpacing: 0.5 }}>{h}</th>
+                    <th key={h} style={{ padding: '9px 14px', textAlign: 'left', fontSize: 11, color: 'var(--text-muted)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: 0.5 }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {movsFiltrados.length === 0 ? (
-                  <tr><td colSpan={5} style={{ padding: 40, textAlign: 'center', color: '#556070' }}>
+                  <tr><td colSpan={5} style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>
                     Sin movimientos. <span style={{ color: '#60A5FA', cursor: 'pointer' }} onClick={() => setTab('nuevo')}>Agregar el primero →</span>
                   </td></tr>
                 ) : movsFiltrados.map((m, i) => (
-                  <tr key={m.id || i} style={{ borderTop: '1px solid #252D3D' }}>
-                    <td style={{ padding: '10px 14px', fontFamily: 'monospace', fontSize: 12, color: '#556070' }}>{m.fecha}</td>
+                  <tr key={m.id || i} style={{ borderTop: '1px solid var(--border)' }}>
+                    <td style={{ padding: '10px 14px', fontFamily: 'monospace', fontSize: 12, color: 'var(--text-muted)' }}>{m.fecha}</td>
                     <td style={{ padding: '10px 14px', fontWeight: 500 }}>
                       {m.concepto}
-                      {m.orden_pago_id && <span style={{ fontSize: 10, color: '#556070', marginLeft: 6, background: 'rgba(245,158,11,0.1)', padding: '1px 6px', borderRadius: 10 }}>OP</span>}
+                      {m.orden_pago_id && <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 6, background: 'rgba(245,158,11,0.1)', padding: '1px 6px', borderRadius: 10 }}>OP</span>}
                     </td>
-                    <td style={{ padding: '10px 14px', fontSize: 13, color: '#8A96AA' }}>{m.contraparte || '—'}</td>
+                    <td style={{ padding: '10px 14px', fontSize: 13, color: 'var(--text-secondary)' }}>{m.contraparte || '—'}</td>
                     <td style={{ padding: '10px 14px', fontFamily: 'monospace', color: '#4ADE80' }}>{m.tipo === 'ingreso' ? `$ ${fmt(m.monto_ars)}` : '—'}</td>
                     <td style={{ padding: '10px 14px', fontFamily: 'monospace', color: '#F87171' }}>{m.tipo === 'egreso' ? `$ ${fmt(m.monto_ars)}` : '—'}</td>
                   </tr>
@@ -362,7 +362,7 @@ const [ordenSeleccionada, setOrdenSeleccionada] = useState<string>(opPreseleccio
 
       {/* Nuevo movimiento */}
       {tab === 'nuevo' && (
-        <div style={{ background: '#161B25', border: '1px solid #252D3D', borderRadius: 10, padding: 28, maxWidth: 600 }}>
+        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, padding: 28, maxWidth: 600 }}>
           <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 20 }}>Nuevo movimiento</h3>
           <div style={{ marginBottom: 16 }}>
             <label style={labelStyle}>Caja *</label>
@@ -407,7 +407,7 @@ const [ordenSeleccionada, setOrdenSeleccionada] = useState<string>(opPreseleccio
               <input type="number" value={form.monto_usd} onChange={e => setForm(f => ({...f, monto_usd: e.target.value}))} placeholder="0" style={inputStyle}/>
             </div>
           </div>
-          <button onClick={guardarMovimiento} disabled={guardando} style={{ background: '#D4A843', color: '#0E1117', border: 'none', borderRadius: 6, padding: '10px 24px', fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: 'system-ui' }}>
+          <button onClick={guardarMovimiento} disabled={guardando} style={{ background: 'var(--accent)', color: 'var(--accent-contrast)', border: 'none', borderRadius: 6, padding: '10px 24px', fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: 'system-ui' }}>
             {guardando ? 'Guardando...' : '✓ Guardar movimiento'}
           </button>
         </div>
@@ -420,11 +420,11 @@ const [ordenSeleccionada, setOrdenSeleccionada] = useState<string>(opPreseleccio
             {[
               { label: 'Emitidos', valor: `$ ${fmt(cheques.filter(c=>c.estado==='emitido').reduce((a,c)=>a+c.monto,0))}`, color: '#F59E0B' },
               { label: 'Depositados', valor: `$ ${fmt(cheques.filter(c=>c.estado==='depositado').reduce((a,c)=>a+c.monto,0))}`, color: '#4ADE80' },
-              { label: 'Vencen en 7d', valor: chequesVencenProximo.length, color: chequesVencenProximo.length > 0 ? '#F59E0B' : '#556070' },
-              { label: 'Vencidos', valor: chequesVencidos.length, color: chequesVencidos.length > 0 ? '#F87171' : '#556070' },
+              { label: 'Vencen en 7d', valor: chequesVencenProximo.length, color: chequesVencenProximo.length > 0 ? '#F59E0B' : 'var(--text-muted)' },
+              { label: 'Vencidos', valor: chequesVencidos.length, color: chequesVencidos.length > 0 ? '#F87171' : 'var(--text-muted)' },
             ].map(k => (
-              <div key={k.label} style={{ background: '#161B25', border: '1px solid #252D3D', borderRadius: 10, padding: '14px 18px' }}>
-                <div style={{ fontSize: 11, color: '#556070', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>{k.label}</div>
+              <div key={k.label} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, padding: '14px 18px' }}>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>{k.label}</div>
                 <div style={{ fontSize: 20, fontWeight: 700, fontFamily: 'monospace', color: k.color }}>{k.valor}</div>
               </div>
             ))}
@@ -438,17 +438,17 @@ const [ordenSeleccionada, setOrdenSeleccionada] = useState<string>(opPreseleccio
               <option value="anulado">Anulados</option>
             </select>
           </div>
-          <div style={{ background: '#161B25', border: '1px solid #252D3D', borderRadius: 10, overflow: 'hidden' }}>
+          <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
             {chequesFiltrados.length === 0 ? (
-              <div style={{ padding: 40, textAlign: 'center', color: '#556070' }}>
+              <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>
                 No hay cheques. <span style={{ color: '#60A5FA', cursor: 'pointer' }} onClick={() => setTab('nuevo_cheque')}>Registrar el primero →</span>
               </div>
             ) : (
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
-                  <tr style={{ background: '#1D2535' }}>
+                  <tr style={{ background: 'var(--bg-table-head)' }}>
                     {['Tipo','N°','Banco','Beneficiario','Vencimiento','Días','Monto','Estado',''].map(h => (
-                      <th key={h} style={{ padding: '9px 12px', textAlign: 'left', fontSize: 11, color: '#556070', fontWeight: 500, textTransform: 'uppercase', letterSpacing: 0.5 }}>{h}</th>
+                      <th key={h} style={{ padding: '9px 12px', textAlign: 'left', fontSize: 11, color: 'var(--text-muted)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: 0.5 }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -459,21 +459,21 @@ const [ordenSeleccionada, setOrdenSeleccionada] = useState<string>(opPreseleccio
                     const esProximo = dias >= 0 && dias <= 7 && c.estado === 'emitido'
                     const st = estadoColor[c.estado] || estadoColor.emitido
                     return (
-                      <tr key={c.id} style={{ borderTop: '1px solid #252D3D', background: esVencido ? 'rgba(239,68,68,0.04)' : esProximo ? 'rgba(245,158,11,0.04)' : idx%2===0 ? 'transparent' : 'rgba(255,255,255,0.01)' }}>
+                      <tr key={c.id} style={{ borderTop: '1px solid var(--border)', background: esVencido ? 'rgba(239,68,68,0.04)' : esProximo ? 'rgba(245,158,11,0.04)' : idx%2===0 ? 'transparent' : 'var(--row-alt)' }}>
                         <td style={{ padding: '10px 12px' }}>
                           <span style={{ background: c.tipo === 'echeq' ? 'rgba(168,85,247,0.12)' : 'rgba(59,130,246,0.12)', color: c.tipo === 'echeq' ? '#A855F7' : '#60A5FA', padding: '2px 7px', borderRadius: 20, fontSize: 10, fontWeight: 600 }}>
                             {c.tipo === 'echeq' ? 'E-CHEQ' : 'CHEQUE'}
                           </span>
                         </td>
                         <td style={{ padding: '10px 12px', fontFamily: 'monospace', fontWeight: 600 }}>{c.numero}</td>
-                        <td style={{ padding: '10px 12px', fontSize: 12, color: '#8A96AA' }}>{c.banco || '—'}</td>
+                        <td style={{ padding: '10px 12px', fontSize: 12, color: 'var(--text-secondary)' }}>{c.banco || '—'}</td>
                         <td style={{ padding: '10px 12px', fontSize: 13 }}>{c.beneficiario || c.proveedores?.razon_social || '—'}</td>
-                        <td style={{ padding: '10px 12px', fontFamily: 'monospace', fontSize: 12, color: esVencido ? '#F87171' : esProximo ? '#F59E0B' : '#E8EDF5', fontWeight: esVencido||esProximo ? 600 : 400 }}>
+                        <td style={{ padding: '10px 12px', fontFamily: 'monospace', fontSize: 12, color: esVencido ? '#F87171' : esProximo ? '#F59E0B' : 'var(--text-primary)', fontWeight: esVencido||esProximo ? 600 : 400 }}>
                           {c.fecha_vencimiento}
                         </td>
                         <td style={{ padding: '10px 12px', fontSize: 12 }}>
                           {c.estado === 'emitido'
-                            ? <span style={{ color: esVencido ? '#F87171' : esProximo ? '#F59E0B' : '#556070', fontWeight: 600 }}>
+                            ? <span style={{ color: esVencido ? '#F87171' : esProximo ? '#F59E0B' : 'var(--text-muted)', fontWeight: 600 }}>
                                 {esVencido ? `−${Math.abs(dias)}d` : dias === 0 ? '¡hoy!' : `${dias}d`}
                               </span>
                             : '—'
@@ -490,13 +490,13 @@ const [ordenSeleccionada, setOrdenSeleccionada] = useState<string>(opPreseleccio
                             confirmCambio?.id === c.id ? (
                               <div style={{ display: 'flex', gap: 4 }}>
                                 <button onClick={() => cambiarEstadoCheque(c.id, confirmCambio!.estado)} style={{ background: '#16a34a', color: '#fff', border: 'none', borderRadius: 4, fontSize: 10, padding: '3px 8px', cursor: 'pointer' }}>Sí</button>
-                                <button onClick={() => setConfirmCambio(null)} style={{ background: '#252D3D', color: '#8A96AA', border: 'none', borderRadius: 4, fontSize: 10, padding: '3px 8px', cursor: 'pointer' }}>No</button>
+                                <button onClick={() => setConfirmCambio(null)} style={{ background: 'var(--border)', color: 'var(--text-secondary)', border: 'none', borderRadius: 4, fontSize: 10, padding: '3px 8px', cursor: 'pointer' }}>No</button>
                               </div>
                             ) : (
                               <div style={{ display: 'flex', gap: 4 }}>
                                 <button onClick={() => setConfirmCambio({ id: c.id, estado: 'depositado' })} style={{ background: 'rgba(34,197,94,0.12)', color: '#4ADE80', border: '1px solid rgba(34,197,94,0.2)', borderRadius: 4, fontSize: 10, padding: '3px 8px', cursor: 'pointer' }}>✓ Depositado</button>
                                 <button onClick={() => setConfirmCambio({ id: c.id, estado: 'rechazado' })} style={{ background: 'rgba(239,68,68,0.1)', color: '#F87171', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 4, fontSize: 10, padding: '3px 8px', cursor: 'pointer' }}>✕ Rechazado</button>
-                                <button onClick={() => setConfirmCambio({ id: c.id, estado: 'anulado' })} style={{ background: 'rgba(255,255,255,0.04)', color: '#556070', border: '1px solid #252D3D', borderRadius: 4, fontSize: 10, padding: '3px 8px', cursor: 'pointer' }}>Anular</button>
+                                <button onClick={() => setConfirmCambio({ id: c.id, estado: 'anulado' })} style={{ background: 'var(--tag-bg)', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: 4, fontSize: 10, padding: '3px 8px', cursor: 'pointer' }}>Anular</button>
                               </div>
                             )
                           )}
@@ -513,7 +513,7 @@ const [ordenSeleccionada, setOrdenSeleccionada] = useState<string>(opPreseleccio
 
       {/* Nuevo cheque */}
       {tab === 'nuevo_cheque' && (
-        <div style={{ background: '#161B25', border: '1px solid #252D3D', borderRadius: 10, padding: 28, maxWidth: 580 }}>
+        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, padding: 28, maxWidth: 580 }}>
           <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 20 }}>Registrar cheque / e-cheq</h3>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
             <div>
@@ -566,8 +566,8 @@ const [ordenSeleccionada, setOrdenSeleccionada] = useState<string>(opPreseleccio
             </div>
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
-            <button onClick={() => setTab('cheques')} style={{ background: 'transparent', color: '#8A96AA', border: '1px solid #2E3A52', borderRadius: 6, padding: '8px 16px', fontSize: 13, cursor: 'pointer', fontFamily: 'system-ui' }}>Cancelar</button>
-            <button onClick={guardarCheque} disabled={guardando} style={{ background: '#D4A843', color: '#0E1117', border: 'none', borderRadius: 6, padding: '8px 20px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'system-ui' }}>
+            <button onClick={() => setTab('cheques')} style={{ background: 'transparent', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 6, padding: '8px 16px', fontSize: 13, cursor: 'pointer', fontFamily: 'system-ui' }}>Cancelar</button>
+            <button onClick={guardarCheque} disabled={guardando} style={{ background: 'var(--accent)', color: 'var(--accent-contrast)', border: 'none', borderRadius: 6, padding: '8px 20px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'system-ui' }}>
               {guardando ? 'Guardando...' : '✓ Registrar cheque'}
             </button>
           </div>

@@ -8,14 +8,20 @@ const fmt = (n: number) => n?.toLocaleString('es-AR', { maximumFractionDigits: 0
 const estadoColor: Record<string, string> = {
   pagada: '#4ADE80',
   pendiente: '#F59E0B',
-  futura: '#556070',
+  futura: 'var(--text-muted)',
   pagada_parcial: '#60A5FA',
 }
 const estadoBg: Record<string, string> = {
   pagada: 'rgba(34,197,94,0.12)',
   pendiente: 'rgba(245,158,11,0.12)',
-  futura: 'rgba(255,255,255,0.04)',
+  futura: 'var(--tag-bg)',
   pagada_parcial: 'rgba(59,130,246,0.12)',
+}
+
+const inputStyle = {
+  width: '100%', background: 'var(--input-bg)', border: '1px solid var(--border)',
+  borderRadius: 6, padding: '8px 12px', color: 'var(--text-primary)',
+  fontFamily: 'monospace', fontSize: 14, outline: 'none'
 }
 
 export default function ClientePageClient({ cuotas: cuotasIniciales, contrato }: { cuotas: any[], contrato: any }) {
@@ -93,16 +99,13 @@ export default function ClientePageClient({ cuotas: cuotasIniciales, contrato }:
       {/* KPIs cuotas */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 28 }}>
         {[
-          { label: 'Precio total', valor: `USD ${fmt(contrato.precio_usd_total)}`, color: '#E8EDF5' },
+          { label: 'Precio total', valor: `USD ${fmt(contrato.precio_usd_total)}`, color: 'var(--text-primary)' },
           { label: `Cuota A · banco (${contrato.split_a_pct}%)`, valor: `$ ${fmt(cuotaA)}`, color: '#60A5FA' },
           { label: `Cuota B · efectivo (${splitB}%)`, valor: `$ ${fmt(cuotaB)}`, color: '#F0C060' },
           { label: 'TC contrato (fijo)', valor: `$ ${fmt(contrato.tc_contrato)}`, color: '#F0C060' },
         ].map(k => (
-          <div key={k.label} style={{
-            background: '#161B25', border: '1px solid #252D3D',
-            borderRadius: 10, padding: '16px 20px'
-          }}>
-            <div style={{ fontSize: 11, color: '#556070', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
+          <div key={k.label} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, padding: '16px 20px' }}>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
               {k.label}
             </div>
             <div style={{ fontSize: 20, fontWeight: 700, fontFamily: 'monospace', color: k.color }}>
@@ -117,13 +120,10 @@ export default function ClientePageClient({ cuotas: cuotasIniciales, contrato }:
         {[
           { label: 'Pagadas', valor: pagadas, color: '#4ADE80', bg: 'rgba(34,197,94,0.08)' },
           { label: 'Pendientes', valor: pendientes, color: '#F59E0B', bg: 'rgba(245,158,11,0.08)' },
-          { label: 'Total cuotas', valor: cuotas.length, color: '#E8EDF5', bg: '#161B25' },
+          { label: 'Total cuotas', valor: cuotas.length, color: 'var(--text-primary)', bg: 'var(--bg-card)' },
         ].map(k => (
-          <div key={k.label} style={{
-            background: k.bg, border: '1px solid #252D3D',
-            borderRadius: 10, padding: '16px 20px'
-          }}>
-            <div style={{ fontSize: 11, color: '#556070', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
+          <div key={k.label} style={{ background: k.bg, border: '1px solid var(--border)', borderRadius: 10, padding: '16px 20px' }}>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
               {k.label}
             </div>
             <div style={{ fontSize: 28, fontWeight: 700, color: k.color }}>{k.valor}</div>
@@ -132,23 +132,23 @@ export default function ClientePageClient({ cuotas: cuotasIniciales, contrato }:
       </div>
 
       {/* Tabla cuotas */}
-      <div style={{ background: '#161B25', border: '1px solid #252D3D', borderRadius: 10, overflow: 'hidden' }}>
-        <div style={{ padding: '14px 20px', borderBottom: '1px solid #252D3D', display: 'flex', justifyContent: 'space-between' }}>
+      <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
+        <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between' }}>
           <span style={{ fontSize: 14, fontWeight: 600 }}>Detalle de cuotas · {cuotas.length}</span>
-          <span style={{ fontSize: 12, color: '#556070' }}>TC fijo: $ {fmt(contrato.tc_contrato)} · hacé click en una cuota para registrar pago</span>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>TC fijo: $ {fmt(contrato.tc_contrato)} · hacé click en una cuota para registrar pago</span>
         </div>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
-            <tr style={{ background: '#1D2535' }}>
+            <tr style={{ background: 'var(--bg-table-head)' }}>
               {['N°', 'Vencimiento', 'Cuota A · banco', 'Cuota B · efectivo', 'Total', 'Estado', 'Pago A', 'Pago B', ''].map(h => (
-                <th key={h} style={{ padding: '9px 14px', textAlign: 'left', fontSize: 11, color: '#556070', fontWeight: 500, textTransform: 'uppercase', letterSpacing: 0.5 }}>{h}</th>
+                <th key={h} style={{ padding: '9px 14px', textAlign: 'left', fontSize: 11, color: 'var(--text-muted)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: 0.5 }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {cuotas.map(c => (
-              <tr key={c.id} style={{ borderTop: '1px solid #252D3D', opacity: c.estado === 'futura' ? 0.45 : 1 }}>
-                <td style={{ padding: '10px 14px', fontFamily: 'monospace', color: '#556070', fontSize: 12 }}>
+              <tr key={c.id} style={{ borderTop: '1px solid var(--border)', opacity: c.estado === 'futura' ? 0.45 : 1 }}>
+                <td style={{ padding: '10px 14px', fontFamily: 'monospace', color: 'var(--text-muted)', fontSize: 12 }}>
                   {String(c.n_cuota).padStart(2, '0')}
                 </td>
                 <td style={{ padding: '10px 14px', fontFamily: 'monospace', fontSize: 12 }}>{c.fecha_vencimiento}</td>
@@ -164,13 +164,13 @@ export default function ClientePageClient({ cuotas: cuotasIniciales, contrato }:
                     {c.estado === 'pagada' ? '✓ Pagada' : c.estado === 'pendiente' ? '⏳ Pendiente' : c.estado === 'pagada_parcial' ? 'Parcial' : 'Futura'}
                   </span>
                 </td>
-                <td style={{ padding: '10px 14px', fontSize: 12, color: '#556070' }}>{c.fecha_pago_a ?? '—'}</td>
-                <td style={{ padding: '10px 14px', fontSize: 12, color: '#556070' }}>{c.fecha_pago_b ?? '—'}</td>
+                <td style={{ padding: '10px 14px', fontSize: 12, color: 'var(--text-muted)' }}>{c.fecha_pago_a ?? '—'}</td>
+                <td style={{ padding: '10px 14px', fontSize: 12, color: 'var(--text-muted)' }}>{c.fecha_pago_b ?? '—'}</td>
                 <td style={{ padding: '10px 14px' }}>
                   {c.estado !== 'futura' && (
                     <button onClick={() => abrirModal(c)} style={{
-                      background: 'rgba(212,168,67,0.15)', color: '#D4A843',
-                      border: '1px solid rgba(212,168,67,0.3)', borderRadius: 6,
+                      background: 'var(--accent-bg)', color: 'var(--accent)',
+                      border: '1px solid var(--accent-border)', borderRadius: 6,
                       padding: '4px 10px', fontSize: 12, cursor: 'pointer', fontFamily: 'system-ui'
                     }}>
                       Registrar pago
@@ -190,13 +190,13 @@ export default function ClientePageClient({ cuotas: cuotasIniciales, contrato }:
           display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999
         }}>
           <div style={{
-            background: '#161B25', border: '1px solid #2E3A52',
+            background: 'var(--bg-card)', border: '1px solid var(--border)',
             borderRadius: 12, padding: 32, width: 480, maxWidth: '90vw'
           }}>
             <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 6 }}>
               Registrar pago · Cuota {String(modal.n_cuota).padStart(2, '0')}
             </h3>
-            <p style={{ color: '#556070', fontSize: 13, marginBottom: 24 }}>
+            <p style={{ color: 'var(--text-muted)', fontSize: 13, marginBottom: 24 }}>
               Vencimiento: {modal.fecha_vencimiento}
             </p>
 
@@ -207,23 +207,14 @@ export default function ClientePageClient({ cuotas: cuotasIniciales, contrato }:
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 <div>
-                  <div style={{ fontSize: 11, color: '#556070', marginBottom: 4 }}>Monto recibido $</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Monto recibido $</div>
                   <input type="number" value={pagoA} onChange={e => setPagoA(e.target.value)}
-                    placeholder={fmt(modal.cuota_a_ars)}
-                    style={{
-                      width: '100%', background: '#0E1117', border: '1px solid #2E3A52',
-                      borderRadius: 6, padding: '8px 12px', color: '#E8EDF5',
-                      fontFamily: 'monospace', fontSize: 14, outline: 'none'
-                    }} />
+                    placeholder={fmt(modal.cuota_a_ars)} style={inputStyle} />
                 </div>
                 <div>
-                  <div style={{ fontSize: 11, color: '#556070', marginBottom: 4 }}>Fecha de pago</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Fecha de pago</div>
                   <input type="date" value={fechaA} onChange={e => setFechaA(e.target.value)}
-                    style={{
-                      width: '100%', background: '#0E1117', border: '1px solid #2E3A52',
-                      borderRadius: 6, padding: '8px 12px', color: '#E8EDF5',
-                      fontFamily: 'system-ui', fontSize: 13, outline: 'none'
-                    }} />
+                    style={{ ...inputStyle, fontFamily: 'system-ui', fontSize: 13 }} />
                 </div>
               </div>
             </div>
@@ -235,23 +226,14 @@ export default function ClientePageClient({ cuotas: cuotasIniciales, contrato }:
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 <div>
-                  <div style={{ fontSize: 11, color: '#556070', marginBottom: 4 }}>Monto recibido $</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Monto recibido $</div>
                   <input type="number" value={pagoB} onChange={e => setPagoB(e.target.value)}
-                    placeholder={fmt(modal.cuota_b_ars)}
-                    style={{
-                      width: '100%', background: '#0E1117', border: '1px solid #2E3A52',
-                      borderRadius: 6, padding: '8px 12px', color: '#E8EDF5',
-                      fontFamily: 'monospace', fontSize: 14, outline: 'none'
-                    }} />
+                    placeholder={fmt(modal.cuota_b_ars)} style={inputStyle} />
                 </div>
                 <div>
-                  <div style={{ fontSize: 11, color: '#556070', marginBottom: 4 }}>Fecha de pago</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Fecha de pago</div>
                   <input type="date" value={fechaB} onChange={e => setFechaB(e.target.value)}
-                    style={{
-                      width: '100%', background: '#0E1117', border: '1px solid #2E3A52',
-                      borderRadius: 6, padding: '8px 12px', color: '#E8EDF5',
-                      fontFamily: 'system-ui', fontSize: 13, outline: 'none'
-                    }} />
+                    style={{ ...inputStyle, fontFamily: 'system-ui', fontSize: 13 }} />
                 </div>
               </div>
             </div>
@@ -268,14 +250,14 @@ export default function ClientePageClient({ cuotas: cuotasIniciales, contrato }:
 
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
               <button onClick={() => setModal(null)} style={{
-                background: 'transparent', color: '#8A96AA',
-                border: '1px solid #2E3A52', borderRadius: 6,
+                background: 'transparent', color: 'var(--text-secondary)',
+                border: '1px solid var(--border)', borderRadius: 6,
                 padding: '8px 18px', fontSize: 13, cursor: 'pointer', fontFamily: 'system-ui'
               }}>
                 Cancelar
               </button>
               <button onClick={guardarPago} disabled={guardando} style={{
-                background: '#D4A843', color: '#0E1117',
+                background: 'var(--accent)', color: 'var(--accent-contrast)',
                 border: 'none', borderRadius: 6,
                 padding: '8px 18px', fontSize: 13, fontWeight: 600,
                 cursor: guardando ? 'not-allowed' : 'pointer', fontFamily: 'system-ui'

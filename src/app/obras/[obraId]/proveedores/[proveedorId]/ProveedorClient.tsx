@@ -6,11 +6,11 @@ import { supabase } from '@/lib/supabase'
 const fmt = (n: number) => n?.toLocaleString('es-AR', { maximumFractionDigits: 0 }) ?? '-'
 
 const inputStyle = {
-  width: '100%', background: '#0E1117', border: '1px solid #2E3A52',
-  borderRadius: 6, padding: '7px 10px', color: '#E8EDF5',
+  width: '100%', background: 'var(--input-bg)', border: '1px solid var(--border)',
+  borderRadius: 6, padding: '7px 10px', color: 'var(--text-primary)',
   fontFamily: 'system-ui', fontSize: 13, outline: 'none'
 }
-const labelStyle = { fontSize: 11, color: '#556070', marginBottom: 4, display: 'block' as const }
+const labelStyle = { fontSize: 11, color: 'var(--text-muted)', marginBottom: 4, display: 'block' as const }
 
 export default function ProveedorClient({ proveedor, certificadosIniciales, rubros, obraId, empresaAdmin, obraNombre, obraDireccion }: {
   proveedor: any, certificadosIniciales: any[], rubros: any[], obraId: string,
@@ -43,11 +43,10 @@ export default function ProveedorClient({ proveedor, certificadosIniciales, rubr
 
   const flash = (msg: string) => { setMensaje(msg); setTimeout(() => setMensaje(''), 3500) }
 
-const getPagadoCert = (c: any) =>
+  const getPagadoCert = (c: any) =>
     c.ordenes_pago?.filter((o: any) => o.estado === 'pagada')
       .reduce((a: number, o: any) => a + (o.monto_efectivo||0) + (o.monto_transfer||0) + (o.monto_cheque||0), 0) || 0
 
-  // Saldo real = solo monto base, sin CAC, IVA ni otros impuestos
   const getBasecert = (c: any) => c.monto_base || c.monto_certificado || 0
 
   const totalCertificado = certs.reduce((a, c) => a + (c.monto_certificado || 0), 0)
@@ -71,12 +70,8 @@ const getPagadoCert = (c: any) =>
     ].filter(Boolean).join(' · ')
 
     const { data: maxCert } = await supabase
-      .from('certificados')
-      .select('numero')
-      .eq('proveedor_id', proveedor.id)
-      .order('numero', { ascending: false })
-      .limit(1)
-      .single()
+      .from('certificados').select('numero').eq('proveedor_id', proveedor.id)
+      .order('numero', { ascending: false }).limit(1).single()
     const numeroCert = (maxCert?.numero || 0) + 1
 
     const { data, error } = await supabase.from('certificados').insert({
@@ -85,10 +80,8 @@ const getPagadoCert = (c: any) =>
       fecha: formCert.fecha, descripcion: formCert.descripcion || null,
       monto_certificado: montoTotal, tiene_iva: montoIva > 0,
       porcentaje_iva: 0, estado: 'pendiente', notas: notasPartes || null,
-      monto_base: montoBase,
-      monto_ajuste_cac: ajusteCac,
-      monto_iva_manual: montoIva,
-      monto_otros_imp: otrosImp,
+      monto_base: montoBase, monto_ajuste_cac: ajusteCac,
+      monto_iva_manual: montoIva, monto_otros_imp: otrosImp,
     }).select('*, ordenes_pago(*)').single()
     if (error) { flash('❌ Error: ' + error.message) }
     else {
@@ -139,16 +132,11 @@ const getPagadoCert = (c: any) =>
 
   const restaurarCert = async (item: any) => {
     const { data, error } = await supabase.from('certificados').insert({
-      obra_id: item.datos.obra_id,
-      proveedor_id: item.datos.proveedor_id,
-      rubro_id: item.datos.rubro_id || null,
-      numero: item.datos.numero,
-      fecha: item.datos.fecha,
-      descripcion: item.datos.descripcion || null,
-      monto_certificado: item.datos.monto_certificado,
-      tiene_iva: item.datos.tiene_iva,
-      porcentaje_iva: item.datos.porcentaje_iva || 0,
-      estado: item.datos.estado,
+      obra_id: item.datos.obra_id, proveedor_id: item.datos.proveedor_id,
+      rubro_id: item.datos.rubro_id || null, numero: item.datos.numero,
+      fecha: item.datos.fecha, descripcion: item.datos.descripcion || null,
+      monto_certificado: item.datos.monto_certificado, tiene_iva: item.datos.tiene_iva,
+      porcentaje_iva: item.datos.porcentaje_iva || 0, estado: item.datos.estado,
       notas: item.datos.notas || null,
     }).select('*, ordenes_pago(*)').single()
     if (error) { flash('❌ Error al restaurar: ' + error.message) }
@@ -198,17 +186,11 @@ const getPagadoCert = (c: any) =>
     if (item.certEliminado) { flash('❌ Primero restaurá el certificado asociado'); return }
     const { certificado_id, id, cert, ...resto } = item.datos
     const { data, error } = await supabase.from('ordenes_pago').insert({
-      certificado_id,
-      obra_id: resto.obra_id,
-      proveedor_id: resto.proveedor_id,
-      numero: resto.numero,
-      fecha: resto.fecha,
-      monto_efectivo: resto.monto_efectivo || 0,
-      monto_transfer: resto.monto_transfer || 0,
-      monto_cheque: resto.monto_cheque || 0,
-      monto_iva: resto.monto_iva || 0,
-      estado: 'emitida',
-      notas: resto.notas || null,
+      certificado_id, obra_id: resto.obra_id, proveedor_id: resto.proveedor_id,
+      numero: resto.numero, fecha: resto.fecha,
+      monto_efectivo: resto.monto_efectivo || 0, monto_transfer: resto.monto_transfer || 0,
+      monto_cheque: resto.monto_cheque || 0, monto_iva: resto.monto_iva || 0,
+      estado: 'emitida', notas: resto.notas || null,
     }).select().single()
     if (error) { flash('❌ Error al restaurar: ' + error.message) }
     else {
@@ -229,12 +211,8 @@ const getPagadoCert = (c: any) =>
     setGuardando(true)
 
     const { data: maxOrden } = await supabase
-      .from('ordenes_pago')
-      .select('numero')
-      .eq('obra_id', obraId)
-      .order('numero', { ascending: false })
-      .limit(1)
-      .single()
+      .from('ordenes_pago').select('numero').eq('obra_id', obraId)
+      .order('numero', { ascending: false }).limit(1).single()
     const numeroOrden = (maxOrden?.numero || 0) + 1
 
     const { data, error } = await supabase.from('ordenes_pago').insert({
@@ -414,20 +392,20 @@ ${orden.cert?.notas ? `<div class="seccion"><div class="seccion-titulo">Detalle<
       {/* KPIs */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:14, marginBottom:24 }}>
         {[
-          { label:'Total certificado', valor:`$ ${fmt(totalCertificado)}`, color:'#E8EDF5' },
+          { label:'Total certificado', valor:`$ ${fmt(totalCertificado)}`, color:'var(--text-primary)' },
           { label:'Monto base (sin CAC/IVA)', valor:`$ ${fmt(totalBase)}`, color:'#60A5FA' },
           { label:'Total pagado', valor:`$ ${fmt(totalPagado)}`, color:'#4ADE80' },
           { label:'Saldo pendiente', valor:`$ ${fmt(saldo)}`, color: saldo>0?'#F87171':'#4ADE80' },
         ].map(k => (
-          <div key={k.label} style={{ background:'#161B25', border:'1px solid #252D3D', borderRadius:10, padding:'16px 20px' }}>
-            <div style={{ fontSize:11, color:'#556070', textTransform:'uppercase', letterSpacing:1, marginBottom:8 }}>{k.label}</div>
+          <div key={k.label} style={{ background:'var(--bg-card)', border:'1px solid var(--border)', borderRadius:10, padding:'16px 20px' }}>
+            <div style={{ fontSize:11, color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:1, marginBottom:8 }}>{k.label}</div>
             <div style={{ fontSize:24, fontWeight:700, fontFamily:'monospace', color:k.color }}>{k.valor}</div>
           </div>
         ))}
       </div>
 
       {/* Tabs */}
-      <div style={{ display:'flex', borderBottom:'1px solid #252D3D', marginBottom:24 }}>
+      <div style={{ display:'flex', borderBottom:'1px solid var(--border)', marginBottom:24 }}>
         {[
           { key:'cuenta', label:`Cuenta corriente · ${certs.length} certificados` },
           { key:'nuevo_cert', label:'＋ Nuevo certificado' },
@@ -435,7 +413,7 @@ ${orden.cert?.notas ? `<div class="seccion"><div class="seccion-titulo">Detalle<
         ].map(t => (
           <div key={t.key} onClick={() => { setTab(t.key as any); setOrdenGenerada(null) }} style={{
             padding:'10px 18px', fontSize:13, fontWeight:500, cursor:'pointer',
-            color: tab===t.key ? '#F0C060' : '#556070',
+            color: tab===t.key ? '#F0C060' : 'var(--text-muted)',
             borderBottom: `2px solid ${tab===t.key ? '#F0C060' : 'transparent'}`,
           }}>{t.label}</div>
         ))}
@@ -446,8 +424,8 @@ ${orden.cert?.notas ? `<div class="seccion"><div class="seccion-titulo">Detalle<
         <>
           <div style={{ display:'flex', justifyContent:'flex-end', marginBottom:12 }}>
             <button onClick={() => setVerPapelera(v => !v)} style={{
-              background:'transparent', color: papelera.length>0?'#F87171':'#556070',
-              border:`1px solid ${papelera.length>0?'rgba(239,68,68,0.3)':'#252D3D'}`,
+              background:'transparent', color: papelera.length>0?'#F87171':'var(--text-muted)',
+              border:`1px solid ${papelera.length>0?'rgba(239,68,68,0.3)':'var(--border)'}`,
               borderRadius:6, padding:'6px 14px', fontSize:12, cursor:'pointer', fontFamily:'system-ui'
             }}>
               🗑️ Papelera {papelera.length > 0 ? `· ${papelera.length}` : ''}
@@ -458,18 +436,18 @@ ${orden.cert?.notas ? `<div class="seccion"><div class="seccion-titulo">Detalle<
             <div style={{ background:'rgba(239,68,68,0.06)', border:'1px solid rgba(239,68,68,0.2)', borderRadius:10, padding:20, marginBottom:20 }}>
               <div style={{ fontSize:13, fontWeight:600, color:'#F87171', marginBottom:14 }}>🗑️ Papelera · elementos eliminados en esta sesión</div>
               {papelera.length === 0
-                ? <div style={{ color:'#556070', fontSize:13 }}>Papelera vacía.</div>
+                ? <div style={{ color:'var(--text-muted)', fontSize:13 }}>Papelera vacía.</div>
                 : papelera.map((item, i) => (
                   <div key={i} style={{ display:'flex', alignItems:'center', gap:14, padding:'10px 0', borderBottom: i < papelera.length-1 ? '1px solid rgba(239,68,68,0.1)' : 'none' }}>
                     <span style={{ fontSize:18 }}>{item.tipo === 'certificado' ? '📋' : '📄'}</span>
                     <div style={{ flex:1 }}>
-                      <div style={{ fontSize:13, color:'#E8EDF5' }}>
+                      <div style={{ fontSize:13, color:'var(--text-primary)' }}>
                         {item.tipo === 'certificado'
                           ? `Certificado N°${String(item.datos.numero).padStart(2,'0')} · $ ${fmt(item.datos.monto_certificado)}`
                           : `Orden N°${String(item.datos.numero).padStart(4,'0')} · $ ${fmt((item.datos.monto_efectivo||0)+(item.datos.monto_transfer||0)+(item.datos.monto_cheque||0))}`
                         }
                       </div>
-                      <div style={{ fontSize:11, color: item.certEliminado ? '#F59E0B' : '#556070', marginTop:2 }}>
+                      <div style={{ fontSize:11, color: item.certEliminado ? '#F59E0B' : 'var(--text-muted)', marginTop:2 }}>
                         {item.certEliminado ? '⚠ Restaurá primero el certificado asociado' : `Eliminado: ${item.eliminadoEn}`}
                       </div>
                     </div>
@@ -477,9 +455,9 @@ ${orden.cert?.notas ? `<div class="seccion"><div class="seccion-titulo">Detalle<
                       onClick={() => item.tipo === 'certificado' ? restaurarCert(item) : restaurarOrden(item)}
                       disabled={item.certEliminado}
                       style={{
-                        background: item.certEliminado ? 'rgba(255,255,255,0.05)' : 'rgba(59,130,246,0.12)',
-                        color: item.certEliminado ? '#556070' : '#60A5FA',
-                        border: `1px solid ${item.certEliminado ? '#252D3D' : 'rgba(59,130,246,0.3)'}`,
+                        background: item.certEliminado ? 'var(--tag-bg)' : 'rgba(59,130,246,0.12)',
+                        color: item.certEliminado ? 'var(--text-muted)' : '#60A5FA',
+                        border: `1px solid ${item.certEliminado ? 'var(--border)' : 'rgba(59,130,246,0.3)'}`,
                         borderRadius:6, padding:'4px 12px', fontSize:12,
                         cursor: item.certEliminado ? 'not-allowed' : 'pointer', fontFamily:'system-ui'
                       }}>
@@ -491,17 +469,17 @@ ${orden.cert?.notas ? `<div class="seccion"><div class="seccion-titulo">Detalle<
             </div>
           )}
 
-          <div style={{ background:'#161B25', border:'1px solid #252D3D', borderRadius:10, overflow:'hidden', marginBottom:24 }}>
+          <div style={{ background:'var(--bg-card)', border:'1px solid var(--border)', borderRadius:10, overflow:'hidden', marginBottom:24 }}>
             {certs.length === 0 ? (
-              <div style={{ padding:40, textAlign:'center', color:'#556070' }}>
+              <div style={{ padding:40, textAlign:'center', color:'var(--text-muted)' }}>
                 Sin certificados. <span style={{ color:'#60A5FA', cursor:'pointer' }} onClick={() => setTab('nuevo_cert')}>Cargar primer certificado →</span>
               </div>
             ) : (
               <table style={{ width:'100%', borderCollapse:'collapse' }}>
                 <thead>
-                  <tr style={{ background:'#1D2535' }}>
+                  <tr style={{ background:'var(--bg-table-head)' }}>
                     {['N°','Fecha','Descripción','Certificado','Pagado','Saldo','Estado',''].map(h => (
-                      <th key={h} style={{ padding:'9px 14px', textAlign:'left', fontSize:11, color:'#556070', fontWeight:500, textTransform:'uppercase', letterSpacing:0.5 }}>{h}</th>
+                      <th key={h} style={{ padding:'9px 14px', textAlign:'left', fontSize:11, color:'var(--text-muted)', fontWeight:500, textTransform:'uppercase', letterSpacing:0.5 }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -510,12 +488,12 @@ ${orden.cert?.notas ? `<div class="seccion"><div class="seccion-titulo">Detalle<
                     const pagado = getPagadoCert(c)
                     const saldoC = c.monto_certificado - pagado
                     return (
-                      <tr key={c.id} style={{ borderTop:'1px solid #252D3D', background: idx%2===0?'transparent':'rgba(255,255,255,0.01)' }}>
-                        <td style={{ padding:'10px 14px', fontFamily:'monospace', color:'#556070', fontSize:12 }}>{String(c.numero).padStart(2,'0')}</td>
+                      <tr key={c.id} style={{ borderTop:'1px solid var(--border)', background: idx%2===0?'transparent':'var(--row-alt)' }}>
+                        <td style={{ padding:'10px 14px', fontFamily:'monospace', color:'var(--text-muted)', fontSize:12 }}>{String(c.numero).padStart(2,'0')}</td>
                         <td style={{ padding:'10px 14px', fontFamily:'monospace', fontSize:12 }}>{c.fecha}</td>
-                        <td style={{ padding:'10px 14px', fontSize:13, color:'#8A96AA', maxWidth:180, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                        <td style={{ padding:'10px 14px', fontSize:13, color:'var(--text-secondary)', maxWidth:180, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
                           {c.descripcion || '—'}
-                          {c.notas && <div style={{ fontSize:10, color:'#556070', marginTop:2 }}>{c.notas}</div>}
+                          {c.notas && <div style={{ fontSize:10, color:'var(--text-muted)', marginTop:2 }}>{c.notas}</div>}
                         </td>
                         <td style={{ padding:'10px 14px', fontFamily:'monospace', fontWeight:600 }}>$ {fmt(c.monto_certificado)}</td>
                         <td style={{ padding:'10px 14px', fontFamily:'monospace', color:'#4ADE80' }}>$ {fmt(pagado)}</td>
@@ -537,7 +515,7 @@ ${orden.cert?.notas ? `<div class="seccion"><div class="seccion-titulo">Detalle<
                           {confirmDelCert === c.id
                             ? <>
                                 <button onClick={() => eliminarCert(c.id)} style={{ background:'#EF4444', color:'#fff', border:'none', borderRadius:3, fontSize:10, padding:'2px 6px', cursor:'pointer', marginRight:4 }}>Sí</button>
-                                <button onClick={() => setConfirmDelCert(null)} style={{ background:'#252D3D', color:'#8A96AA', border:'none', borderRadius:3, fontSize:10, padding:'2px 6px', cursor:'pointer' }}>No</button>
+                                <button onClick={() => setConfirmDelCert(null)} style={{ background:'var(--border)', color:'var(--text-secondary)', border:'none', borderRadius:3, fontSize:10, padding:'2px 6px', cursor:'pointer' }}>No</button>
                               </>
                             : <button onClick={() => setConfirmDelCert(c.id)} style={{ background:'none', border:'none', cursor:'pointer', fontSize:13, opacity:0.3, color:'#F87171' }}
                                 onMouseEnter={e => (e.currentTarget.style.opacity='1')}
@@ -547,7 +525,7 @@ ${orden.cert?.notas ? `<div class="seccion"><div class="seccion-titulo">Detalle<
                       </tr>
                     )
                   })}
-                  <tr style={{ borderTop:'2px solid #2E3A52', background:'rgba(255,255,255,0.03)' }}>
+                  <tr style={{ borderTop:'2px solid var(--border)', background:'var(--row-alt)' }}>
                     <td colSpan={3} style={{ padding:'12px 14px', fontWeight:600 }}>TOTALES</td>
                     <td style={{ padding:'12px 14px', fontFamily:'monospace', fontWeight:700 }}>$ {fmt(totalCertificado)}</td>
                     <td style={{ padding:'12px 14px', fontFamily:'monospace', fontWeight:700, color:'#4ADE80' }}>$ {fmt(totalPagado)}</td>
@@ -567,7 +545,7 @@ ${orden.cert?.notas ? `<div class="seccion"><div class="seccion-titulo">Detalle<
                   <div key={o.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'10px 0', borderBottom:'1px solid rgba(245,158,11,0.1)' }}>
                     <div style={{ flex:1 }}>
                       <div style={{ fontSize:13, fontWeight:500 }}>OP N°{String(o.numero).padStart(4,'0')} · Cert. N°{String(c.numero).padStart(2,'0')}</div>
-                      <div style={{ fontSize:12, color:'#556070', marginTop:2 }}>
+                      <div style={{ fontSize:12, color:'var(--text-muted)', marginTop:2 }}>
                         {o.fecha} {o.monto_transfer>0?`· Transfer: $${fmt(o.monto_transfer)}`:''} {o.monto_efectivo>0?`· Efectivo: $${fmt(o.monto_efectivo)}`:''} {o.monto_cheque>0?`· Cheque: $${fmt(o.monto_cheque)}`:''}
                       </div>
                     </div>
@@ -579,13 +557,13 @@ ${orden.cert?.notas ? `<div class="seccion"><div class="seccion-titulo">Detalle<
                       ✏️ Editar
                     </button>
                     <button onClick={() => imprimirOrden({ ...o, cert: c })}
-                      style={{ background:'transparent', color:'#8A96AA', border:'1px solid #2E3A52', borderRadius:6, padding:'4px 10px', fontSize:12, cursor:'pointer', fontFamily:'system-ui' }}>
+                      style={{ background:'transparent', color:'var(--text-secondary)', border:'1px solid var(--border)', borderRadius:6, padding:'4px 10px', fontSize:12, cursor:'pointer', fontFamily:'system-ui' }}>
                       🖨️ Imprimir
                     </button>
                     {confirmDelOrden === o.id
                       ? <>
                           <button onClick={() => eliminarOrden(o, c.id)} style={{ background:'#EF4444', color:'#fff', border:'none', borderRadius:4, fontSize:11, padding:'4px 8px', cursor:'pointer' }}>Sí, eliminar</button>
-                          <button onClick={() => setConfirmDelOrden(null)} style={{ background:'#252D3D', color:'#8A96AA', border:'none', borderRadius:4, fontSize:11, padding:'4px 8px', cursor:'pointer' }}>No</button>
+                          <button onClick={() => setConfirmDelOrden(null)} style={{ background:'var(--border)', color:'var(--text-secondary)', border:'none', borderRadius:4, fontSize:11, padding:'4px 8px', cursor:'pointer' }}>No</button>
                         </>
                       : <button onClick={() => setConfirmDelOrden(o.id)}
                           style={{ background:'rgba(239,68,68,0.1)', color:'#F87171', border:'1px solid rgba(239,68,68,0.2)', borderRadius:6, padding:'4px 10px', fontSize:12, cursor:'pointer', fontFamily:'system-ui' }}>
@@ -606,7 +584,7 @@ ${orden.cert?.notas ? `<div class="seccion"><div class="seccion-titulo">Detalle<
 
       {/* Nuevo certificado */}
       {tab === 'nuevo_cert' && (
-        <div style={{ background:'#161B25', border:'1px solid #252D3D', borderRadius:10, padding:28, maxWidth:580 }}>
+        <div style={{ background:'var(--bg-card)', border:'1px solid var(--border)', borderRadius:10, padding:28, maxWidth:580 }}>
           <h3 style={{ fontSize:15, fontWeight:600, marginBottom:20 }}>
             Certificado N°{String(certs.length+1).padStart(2,'0')} · {proveedor.razon_social}
           </h3>
@@ -643,8 +621,8 @@ ${orden.cert?.notas ? `<div class="seccion"><div class="seccion-titulo">Detalle<
               <input type="number" value={formCert.otros_impuestos} onChange={e => setFormCert(f => ({...f, otros_impuestos:e.target.value}))} placeholder="0" style={inputStyle}/>
             </div>
             {(parseFloat(formCert.monto_base)||0)+(parseFloat(formCert.ajuste_cac)||0)+(parseFloat(formCert.monto_iva)||0)+(parseFloat(formCert.otros_impuestos)||0) > 0 && (
-              <div style={{ gridColumn:'1 / -1', background:'rgba(212,168,67,0.08)', border:'1px solid rgba(212,168,67,0.2)', borderRadius:8, padding:'10px 14px' }}>
-                <span style={{ fontSize:12, color:'#556070' }}>Total certificado: </span>
+              <div style={{ gridColumn:'1 / -1', background:'var(--accent-bg)', border:'1px solid var(--accent-border)', borderRadius:8, padding:'10px 14px' }}>
+                <span style={{ fontSize:12, color:'var(--text-muted)' }}>Total certificado: </span>
                 <span style={{ fontSize:16, fontWeight:700, fontFamily:'monospace', color:'#F0C060' }}>
                   $ {fmt((parseFloat(formCert.monto_base)||0)+(parseFloat(formCert.ajuste_cac)||0)+(parseFloat(formCert.monto_iva)||0)+(parseFloat(formCert.otros_impuestos)||0))}
                 </span>
@@ -656,8 +634,8 @@ ${orden.cert?.notas ? `<div class="seccion"><div class="seccion-titulo">Detalle<
             </div>
           </div>
           <div style={{ display:'flex', gap:10 }}>
-            <button onClick={() => setTab('cuenta')} style={{ background:'transparent', color:'#8A96AA', border:'1px solid #2E3A52', borderRadius:6, padding:'8px 16px', fontSize:13, cursor:'pointer', fontFamily:'system-ui' }}>Cancelar</button>
-            <button onClick={guardarCert} disabled={guardando} style={{ background:'#D4A843', color:'#0E1117', border:'none', borderRadius:6, padding:'8px 20px', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'system-ui' }}>
+            <button onClick={() => setTab('cuenta')} style={{ background:'transparent', color:'var(--text-secondary)', border:'1px solid var(--border)', borderRadius:6, padding:'8px 16px', fontSize:13, cursor:'pointer', fontFamily:'system-ui' }}>Cancelar</button>
+            <button onClick={guardarCert} disabled={guardando} style={{ background:'var(--accent)', color:'var(--accent-contrast)', border:'none', borderRadius:6, padding:'8px 20px', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'system-ui' }}>
               {guardando ? 'Guardando...' : '✓ Guardar certificado'}
             </button>
           </div>
@@ -668,23 +646,23 @@ ${orden.cert?.notas ? `<div class="seccion"><div class="seccion-titulo">Detalle<
       {tab === 'orden_pago' && (
         <div style={{ maxWidth:580 }}>
           {ordenGenerada ? (
-            <div style={{ background:'#161B25', border:'1px solid #4ADE80', borderRadius:10, padding:28 }}>
+            <div style={{ background:'var(--bg-card)', border:'1px solid #4ADE80', borderRadius:10, padding:28 }}>
               <div style={{ fontSize:15, fontWeight:600, color:'#4ADE80', marginBottom:8 }}>✓ Orden emitida correctamente</div>
               <div style={{ fontSize:13, color:'#F59E0B', marginBottom:16 }}>⚠ Recordá marcarla como pagada cuando ejecutes el pago en caja</div>
               <div style={{ display:'flex', gap:10 }}>
-                <button onClick={() => imprimirOrden(ordenGenerada)} style={{ background:'#D4A843', color:'#0E1117', border:'none', borderRadius:6, padding:'10px 20px', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'system-ui' }}>
+                <button onClick={() => imprimirOrden(ordenGenerada)} style={{ background:'var(--accent)', color:'var(--accent-contrast)', border:'none', borderRadius:6, padding:'10px 20px', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'system-ui' }}>
                   🖨️ Imprimir orden + recibo
                 </button>
-                <button onClick={() => { setOrdenGenerada(null); setTab('cuenta') }} style={{ background:'transparent', color:'#8A96AA', border:'1px solid #2E3A52', borderRadius:6, padding:'10px 16px', fontSize:13, cursor:'pointer', fontFamily:'system-ui' }}>
+                <button onClick={() => { setOrdenGenerada(null); setTab('cuenta') }} style={{ background:'transparent', color:'var(--text-secondary)', border:'1px solid var(--border)', borderRadius:6, padding:'10px 16px', fontSize:13, cursor:'pointer', fontFamily:'system-ui' }}>
                   Volver a cuenta corriente
                 </button>
               </div>
             </div>
           ) : (
-            <div style={{ background:'#161B25', border:'1px solid #252D3D', borderRadius:10, padding:28 }}>
+            <div style={{ background:'var(--bg-card)', border:'1px solid var(--border)', borderRadius:10, padding:28 }}>
               <h3 style={{ fontSize:15, fontWeight:600, marginBottom:20 }}>Generar orden de pago · {proveedor.razon_social}</h3>
               {certsPendientes.length === 0 ? (
-                <div style={{ color:'#556070', textAlign:'center', padding:20 }}>No hay certificados pendientes de pago.</div>
+                <div style={{ color:'var(--text-muted)', textAlign:'center', padding:20 }}>No hay certificados pendientes de pago.</div>
               ) : (
                 <>
                   <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14, marginBottom:14 }}>
@@ -730,8 +708,8 @@ ${orden.cert?.notas ? `<div class="seccion"><div class="seccion-titulo">Detalle<
                     ⚠ La orden se emite pero el saldo no se descuenta hasta que confirmés el pago en caja.
                   </div>
                   <div style={{ display:'flex', gap:10 }}>
-                    <button onClick={() => setTab('cuenta')} style={{ background:'transparent', color:'#8A96AA', border:'1px solid #2E3A52', borderRadius:6, padding:'8px 16px', fontSize:13, cursor:'pointer', fontFamily:'system-ui' }}>Cancelar</button>
-                    <button onClick={generarOrden} disabled={guardando||!certSeleccionado} style={{ background:'#D4A843', color:'#0E1117', border:'none', borderRadius:6, padding:'8px 20px', fontSize:13, fontWeight:600, cursor:(!certSeleccionado||guardando)?'not-allowed':'pointer', fontFamily:'system-ui', opacity:!certSeleccionado?0.6:1 }}>
+                    <button onClick={() => setTab('cuenta')} style={{ background:'transparent', color:'var(--text-secondary)', border:'1px solid var(--border)', borderRadius:6, padding:'8px 16px', fontSize:13, cursor:'pointer', fontFamily:'system-ui' }}>Cancelar</button>
+                    <button onClick={generarOrden} disabled={guardando||!certSeleccionado} style={{ background:'var(--accent)', color:'var(--accent-contrast)', border:'none', borderRadius:6, padding:'8px 20px', fontSize:13, fontWeight:600, cursor:(!certSeleccionado||guardando)?'not-allowed':'pointer', fontFamily:'system-ui', opacity:!certSeleccionado?0.6:1 }}>
                       {guardando ? 'Generando...' : '📄 Generar orden de pago'}
                     </button>
                   </div>
@@ -745,7 +723,7 @@ ${orden.cert?.notas ? `<div class="seccion"><div class="seccion-titulo">Detalle<
       {/* Modal edición orden */}
       {editandoOrden && (
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.75)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:999 }}>
-          <div style={{ background:'#161B25', border:'1px solid #2E3A52', borderRadius:12, padding:28, width:480, maxWidth:'90vw' }}>
+          <div style={{ background:'var(--bg-card)', border:'1px solid var(--border)', borderRadius:12, padding:28, width:480, maxWidth:'90vw' }}>
             <h3 style={{ fontSize:16, fontWeight:600, marginBottom:20 }}>Editar orden N°{String(editandoOrden.numero).padStart(4,'0')}</h3>
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14, marginBottom:16 }}>
               <div style={{ gridColumn:'1 / -1' }}>
@@ -770,8 +748,8 @@ ${orden.cert?.notas ? `<div class="seccion"><div class="seccion-titulo">Detalle<
               </div>
             </div>
             <div style={{ display:'flex', gap:10, justifyContent:'flex-end' }}>
-              <button onClick={() => setEditandoOrden(null)} style={{ background:'transparent', color:'#8A96AA', border:'1px solid #2E3A52', borderRadius:6, padding:'8px 16px', fontSize:13, cursor:'pointer', fontFamily:'system-ui' }}>Cancelar</button>
-              <button onClick={guardarEdicionOrden} disabled={guardando} style={{ background:'#D4A843', color:'#0E1117', border:'none', borderRadius:6, padding:'8px 18px', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'system-ui' }}>
+              <button onClick={() => setEditandoOrden(null)} style={{ background:'transparent', color:'var(--text-secondary)', border:'1px solid var(--border)', borderRadius:6, padding:'8px 16px', fontSize:13, cursor:'pointer', fontFamily:'system-ui' }}>Cancelar</button>
+              <button onClick={guardarEdicionOrden} disabled={guardando} style={{ background:'var(--accent)', color:'var(--accent-contrast)', border:'none', borderRadius:6, padding:'8px 18px', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'system-ui' }}>
                 {guardando ? 'Guardando...' : '✓ Guardar'}
               </button>
             </div>
@@ -782,7 +760,7 @@ ${orden.cert?.notas ? `<div class="seccion"><div class="seccion-titulo">Detalle<
       {/* Modal edición certificado */}
       {editandoCert && (
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.75)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:999 }}>
-          <div style={{ background:'#161B25', border:'1px solid #2E3A52', borderRadius:12, padding:28, width:480, maxWidth:'90vw' }}>
+          <div style={{ background:'var(--bg-card)', border:'1px solid var(--border)', borderRadius:12, padding:28, width:480, maxWidth:'90vw' }}>
             <h3 style={{ fontSize:16, fontWeight:600, marginBottom:20 }}>Editar certificado N°{String(editandoCert.numero).padStart(2,'0')}</h3>
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:14, marginBottom:16 }}>
               <div>
@@ -810,8 +788,8 @@ ${orden.cert?.notas ? `<div class="seccion"><div class="seccion-titulo">Detalle<
               </div>
             </div>
             <div style={{ display:'flex', gap:10, justifyContent:'flex-end' }}>
-              <button onClick={() => setEditandoCert(null)} style={{ background:'transparent', color:'#8A96AA', border:'1px solid #2E3A52', borderRadius:6, padding:'8px 16px', fontSize:13, cursor:'pointer', fontFamily:'system-ui' }}>Cancelar</button>
-              <button onClick={guardarEdicionCert} disabled={guardando} style={{ background:'#D4A843', color:'#0E1117', border:'none', borderRadius:6, padding:'8px 18px', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'system-ui' }}>
+              <button onClick={() => setEditandoCert(null)} style={{ background:'transparent', color:'var(--text-secondary)', border:'1px solid var(--border)', borderRadius:6, padding:'8px 16px', fontSize:13, cursor:'pointer', fontFamily:'system-ui' }}>Cancelar</button>
+              <button onClick={guardarEdicionCert} disabled={guardando} style={{ background:'var(--accent)', color:'var(--accent-contrast)', border:'none', borderRadius:6, padding:'8px 18px', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'system-ui' }}>
                 {guardando ? 'Guardando...' : '✓ Guardar'}
               </button>
             </div>
