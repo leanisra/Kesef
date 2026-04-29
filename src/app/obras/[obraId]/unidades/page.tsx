@@ -12,6 +12,7 @@ export default async function UnidadesPage({ params }: { params: { obraId: strin
     .from('unidades')
     .select('*')
     .eq('obra_id', obraId)
+    .neq('eliminado', true)
     .order('orden')
 
   return (

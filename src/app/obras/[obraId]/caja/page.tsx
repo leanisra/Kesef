@@ -16,16 +16,17 @@ export default async function CajaPage({ params, searchParams }: { params: { obr
 
   const { data: movimientos } = await supabase
     .from('movimientos_caja').select('*').eq('obra_id', obraId)
+    .neq('eliminado', true)
     .order('fecha', { ascending: false })
 
   const { data: ordenesPendientes } = await supabase
     .from('ordenes_pago')
     .select('*, certificados(numero, descripcion, notas, proveedores(razon_social))')
-    .eq('obra_id', obraId).eq('estado', 'emitida').order('numero')
+    .eq('obra_id', obraId).eq('estado', 'emitida').neq('eliminado', true).order('numero')
 
   const { data: cheques } = await supabase
     .from('cheques').select('*, proveedores(razon_social)')
-    .eq('obra_id', obraId).order('fecha_vencimiento', { ascending: true })
+    .eq('obra_id', obraId).neq('eliminado', true).order('fecha_vencimiento', { ascending: true })
 
   const { data: proveedoresObra } = await supabase
     .from('proveedores_obras').select('proveedor_id').eq('obra_id', obraId)
