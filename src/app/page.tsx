@@ -32,6 +32,9 @@ export default function Home() {
           <h1 style={{ fontSize: 28, fontWeight: 700, color: 'var(--accent)' }}>KESEF</h1>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <ThemeToggle />
+            <Link href="/perfil" style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text-muted)', padding: '6px 14px', fontSize: 13, textDecoration: 'none' }}>
+              Mi perfil
+            </Link>
             <button onClick={handleLogout} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text-muted)', padding: '6px 14px', fontSize: 13, cursor: 'pointer' }}>
               Cerrar sesión
             </button>
