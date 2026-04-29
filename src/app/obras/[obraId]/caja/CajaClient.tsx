@@ -25,7 +25,7 @@ export default function CajaClient({ cajas, movimientosIniciales, obraId, ordene
   const [ordenes, setOrdenes] = useState(ordenesPendientes)
   const [cheques, setCheques] = useState(chequesIniciales)
   const [cajaActiva, setCajaActiva] = useState<string>(() => cajas?.[0]?.id ?? '')
-  const [tab, setTab] = useState<'movimientos'|'nuevo'|'cheques'|'nuevo_cheque'>(opPreseleccionada ? 'nuevo' : 'movimientos')
+  const [tab, setTab] = useState<'movimientos'|'nuevo'|'cheques'|'nuevo_cheque'|'papelera'>(opPreseleccionada ? 'nuevo' : 'movimientos')
   const [guardando, setGuardando] = useState(false)
   const [mensaje, setMensaje] = useState('')
   const [ordenSeleccionada, setOrdenSeleccionada] = useState<string>(opPreseleccionada || '')
@@ -33,6 +33,17 @@ export default function CajaClient({ cajas, movimientosIniciales, obraId, ordene
   const [tcLabel, setTcLabel] = useState<string>('cargando...')
   const [filtroEstado, setFiltroEstado] = useState('todos')
   const [confirmCambio, setConfirmCambio] = useState<{id: string, estado: string}|null>(null)
+
+  // Edit / delete states
+  const [editandoMov, setEditandoMov] = useState<any>(null)
+  const [confirmDelMov, setConfirmDelMov] = useState<string|null>(null)
+  const [confirmDelCheque, setConfirmDelCheque] = useState<string|null>(null)
+  const [editandoCheque, setEditandoCheque] = useState<any>(null)
+
+  // Papelera
+  const [papeleraMovs, setPapeleraMovs] = useState<any[]>([])
+  const [papeleraCheques, setPapeleraCheques] = useState<any[]>([])
+  const [papeleraCargada, setPapeleraCargada] = useState(false)
 
   useEffect(() => {
     fetch('https://dolarapi.com/v1/dolares/blue')
@@ -46,10 +57,19 @@ export default function CajaClient({ cajas, movimientosIniciales, obraId, ordene
   }, [])
 
   useEffect(() => {
-    if (opPreseleccionada && ordenes.length > 0) {
-      aplicarOrden(opPreseleccionada, true)
-    }
+    if (opPreseleccionada && ordenes.length > 0) aplicarOrden(opPreseleccionada, true)
   }, [opPreseleccionada, ordenes])
+
+  const cargarPapelera = async () => {
+    if (papeleraCargada) return
+    const [{ data: movsDel }, { data: chequeDel }] = await Promise.all([
+      supabase.from('movimientos_caja').select('*').eq('obra_id', obraId).eq('eliminado', true).order('fecha', { ascending: false }),
+      supabase.from('cheques').select('*').eq('obra_id', obraId).eq('eliminado', true).order('fecha_vencimiento'),
+    ])
+    setPapeleraMovs(movsDel || [])
+    setPapeleraCheques(chequeDel || [])
+    setPapeleraCargada(true)
+  }
 
   const [form, setForm] = useState({
     fecha: new Date().toISOString().split('T')[0],
@@ -74,11 +94,9 @@ export default function CajaClient({ cajas, movimientosIniciales, obraId, ordene
     }
     const orden = ordenes.find(o => o.id === ordenId)
     if (!orden) return
-
     const proveedor = orden.certificados?.proveedores?.razon_social || ''
     const certNum = String(orden.certificados?.numero || '').padStart(2, '0')
     const total = (orden.monto_transfer||0) + (orden.monto_efectivo||0) + (orden.monto_cheque||0)
-
     if (esMovimiento) {
       setOrdenSeleccionada(ordenId)
       const concepto = `OP N°${String(orden.numero).padStart(4,'0')} - ${proveedor} - Cert. N°${certNum}`
@@ -89,18 +107,12 @@ export default function CajaClient({ cajas, movimientosIniciales, obraId, ordene
       else monto = String(total)
       setForm(f => ({ ...f, tipo: 'egreso', concepto, contraparte: proveedor, monto_ars: monto }))
     } else {
-      setFormCheque(f => ({
-        ...f, orden_pago_id: ordenId,
-        monto: String(total),
-        beneficiario: proveedor || f.beneficiario,
-      }))
+      setFormCheque(f => ({ ...f, orden_pago_id: ordenId, monto: String(total), beneficiario: proveedor || f.beneficiario }))
     }
   }
 
   const guardarMovimiento = async () => {
-    if (!form.concepto || (!form.monto_ars && !form.monto_usd)) {
-      flash('❌ Completá el concepto y al menos un monto'); return
-    }
+    if (!form.concepto || (!form.monto_ars && !form.monto_usd)) { flash('❌ Completá el concepto y al menos un monto'); return }
     setGuardando(true)
     const { data, error } = await supabase.from('movimientos_caja').insert({
       caja_id: cajaActiva, obra_id: obraId, fecha: form.fecha,
@@ -111,7 +123,6 @@ export default function CajaClient({ cajas, movimientosIniciales, obraId, ordene
       tc_blue: tcHoy, origen: 'manual',
       orden_pago_id: ordenSeleccionada || null,
     }).select().single()
-
     if (error) { flash('❌ Error: ' + error.message) }
     else {
       setMovimientos(m => [data, ...m])
@@ -137,6 +148,50 @@ export default function CajaClient({ cajas, movimientosIniciales, obraId, ordene
     setGuardando(false)
   }
 
+  const guardarEdicionMov = async () => {
+    if (!editandoMov) return
+    setGuardando(true)
+    const { error } = await supabase.from('movimientos_caja').update({
+      fecha: editandoMov.fecha, tipo: editandoMov.tipo,
+      concepto: editandoMov.concepto, contraparte: editandoMov.contraparte || null,
+      monto_ars: editandoMov.monto_ars ? parseFloat(editandoMov.monto_ars) : null,
+      monto_usd: editandoMov.monto_usd ? parseFloat(editandoMov.monto_usd) : null,
+    }).eq('id', editandoMov.id)
+    if (error) { flash('❌ Error: ' + error.message) }
+    else {
+      setMovimientos(ms => ms.map(m => m.id === editandoMov.id ? { ...m, ...editandoMov,
+        monto_ars: editandoMov.monto_ars ? parseFloat(editandoMov.monto_ars) : null,
+        monto_usd: editandoMov.monto_usd ? parseFloat(editandoMov.monto_usd) : null,
+      } : m))
+      setEditandoMov(null)
+      flash('✓ Movimiento actualizado')
+    }
+    setGuardando(false)
+  }
+
+  const eliminarMov = async (id: string) => {
+    const { error } = await supabase.from('movimientos_caja').update({ eliminado: true }).eq('id', id)
+    if (error) { flash('❌ Error: ' + error.message) }
+    else {
+      const mov = movimientos.find(m => m.id === id)
+      setMovimientos(ms => ms.filter(m => m.id !== id))
+      if (mov) setPapeleraMovs(p => [mov, ...p])
+      setPapeleraCargada(true)
+      setConfirmDelMov(null)
+      flash('✓ Movimiento eliminado · podés restaurarlo desde la Papelera')
+    }
+  }
+
+  const restaurarMov = async (mov: any) => {
+    const { error } = await supabase.from('movimientos_caja').update({ eliminado: false }).eq('id', mov.id)
+    if (error) { flash('❌ Error: ' + error.message) }
+    else {
+      setMovimientos(ms => [{ ...mov, eliminado: false }, ...ms])
+      setPapeleraMovs(p => p.filter(m => m.id !== mov.id))
+      flash('✓ Movimiento restaurado')
+    }
+  }
+
   const guardarCheque = async () => {
     if (!formCheque.numero || !formCheque.monto || !formCheque.fecha_vencimiento) {
       flash('❌ Completá número, monto y fecha de vencimiento'); return
@@ -152,7 +207,6 @@ export default function CajaClient({ cajas, movimientosIniciales, obraId, ordene
       orden_pago_id: formCheque.orden_pago_id || null,
       estado: 'emitido', notas: formCheque.notas || null,
     }).select('*, proveedores(razon_social)').single()
-
     if (error) { flash('❌ Error: ' + error.message) }
     else {
       setCheques(cs => [...cs, data].sort((a, b) => new Date(a.fecha_vencimiento).getTime() - new Date(b.fecha_vencimiento).getTime()))
@@ -163,14 +217,53 @@ export default function CajaClient({ cajas, movimientosIniciales, obraId, ordene
     setGuardando(false)
   }
 
+  const guardarEdicionCheque = async () => {
+    if (!editandoCheque) return
+    setGuardando(true)
+    const { error } = await supabase.from('cheques').update({
+      numero: editandoCheque.numero, banco: editandoCheque.banco || null,
+      fecha_vencimiento: editandoCheque.fecha_vencimiento,
+      monto: parseFloat(editandoCheque.monto),
+      beneficiario: editandoCheque.beneficiario || null,
+      notas: editandoCheque.notas || null,
+    }).eq('id', editandoCheque.id)
+    if (error) { flash('❌ Error: ' + error.message) }
+    else {
+      setCheques(cs => cs.map(c => c.id === editandoCheque.id ? { ...c, ...editandoCheque, monto: parseFloat(editandoCheque.monto) } : c)
+        .sort((a, b) => new Date(a.fecha_vencimiento).getTime() - new Date(b.fecha_vencimiento).getTime()))
+      setEditandoCheque(null)
+      flash('✓ Cheque actualizado')
+    }
+    setGuardando(false)
+  }
+
+  const eliminarCheque = async (id: string) => {
+    const { error } = await supabase.from('cheques').update({ eliminado: true }).eq('id', id)
+    if (error) { flash('❌ Error: ' + error.message) }
+    else {
+      const ch = cheques.find(c => c.id === id)
+      setCheques(cs => cs.filter(c => c.id !== id))
+      if (ch) setPapeleraCheques(p => [ch, ...p])
+      setPapeleraCargada(true)
+      setConfirmDelCheque(null)
+      flash('✓ Cheque eliminado · podés restaurarlo desde la Papelera')
+    }
+  }
+
+  const restaurarCheque = async (ch: any) => {
+    const { error } = await supabase.from('cheques').update({ eliminado: false }).eq('id', ch.id)
+    if (error) { flash('❌ Error: ' + error.message) }
+    else {
+      setCheques(cs => [...cs, { ...ch, eliminado: false }].sort((a, b) => new Date(a.fecha_vencimiento).getTime() - new Date(b.fecha_vencimiento).getTime()))
+      setPapeleraCheques(p => p.filter(c => c.id !== ch.id))
+      flash('✓ Cheque restaurado')
+    }
+  }
+
   const cambiarEstadoCheque = async (id: string, nuevoEstado: string) => {
     const { error } = await supabase.from('cheques').update({ estado: nuevoEstado }).eq('id', id)
     if (error) { flash('❌ Error: ' + error.message) }
-    else {
-      setCheques(cs => cs.map(c => c.id === id ? { ...c, estado: nuevoEstado } : c))
-      setConfirmCambio(null)
-      flash('✓ Estado actualizado')
-    }
+    else { setCheques(cs => cs.map(c => c.id === id ? { ...c, estado: nuevoEstado } : c)); setConfirmCambio(null); flash('✓ Estado actualizado') }
   }
 
   const movsFiltrados = movimientos.filter(m => m.caja_id === cajaActiva)
@@ -216,6 +309,8 @@ export default function CajaClient({ cajas, movimientosIniciales, obraId, ordene
       {value && <OrdenDetalle ordenId={value} />}
     </>
   )
+
+  const totalPapelera = papeleraMovs.length + papeleraCheques.length
 
   return (
     <>
@@ -302,11 +397,12 @@ export default function CajaClient({ cajas, movimientosIniciales, obraId, ordene
           { key: 'nuevo', label: '＋ Nuevo movimiento' },
           { key: 'cheques', label: `🏦 Cheques · ${cheques.filter(c => c.estado === 'emitido').length} emitidos` },
           { key: 'nuevo_cheque', label: '＋ Nuevo cheque' },
+          { key: 'papelera', label: `🗑️ Papelera${totalPapelera > 0 ? ` · ${totalPapelera}` : ''}` },
         ].map(t => (
-          <div key={t.key} onClick={() => setTab(t.key as any)} style={{
+          <div key={t.key} onClick={() => { setTab(t.key as any); if (t.key === 'papelera') cargarPapelera() }} style={{
             padding: '10px 18px', fontSize: 13, fontWeight: 500, cursor: 'pointer',
-            color: tab === t.key ? '#F0C060' : 'var(--text-muted)',
-            borderBottom: `2px solid ${tab === t.key ? '#F0C060' : 'transparent'}`,
+            color: tab === t.key ? (t.key === 'papelera' ? '#F87171' : '#F0C060') : 'var(--text-muted)',
+            borderBottom: `2px solid ${tab === t.key ? (t.key === 'papelera' ? '#F87171' : '#F0C060') : 'transparent'}`,
           }}>{t.label}</div>
         ))}
       </div>
@@ -332,14 +428,14 @@ export default function CajaClient({ cajas, movimientosIniciales, obraId, ordene
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ background: 'var(--bg-table-head)' }}>
-                  {['Fecha','Concepto','Contraparte','Ingreso','Egreso'].map(h => (
+                  {['Fecha','Concepto','Contraparte','Ingreso','Egreso',''].map(h => (
                     <th key={h} style={{ padding: '9px 14px', textAlign: 'left', fontSize: 11, color: 'var(--text-muted)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: 0.5 }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {movsFiltrados.length === 0 ? (
-                  <tr><td colSpan={5} style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>
+                  <tr><td colSpan={6} style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>
                     Sin movimientos. <span style={{ color: '#60A5FA', cursor: 'pointer' }} onClick={() => setTab('nuevo')}>Agregar el primero →</span>
                   </td></tr>
                 ) : movsFiltrados.map((m, i) => (
@@ -352,6 +448,20 @@ export default function CajaClient({ cajas, movimientosIniciales, obraId, ordene
                     <td style={{ padding: '10px 14px', fontSize: 13, color: 'var(--text-secondary)' }}>{m.contraparte || '—'}</td>
                     <td style={{ padding: '10px 14px', fontFamily: 'monospace', color: '#4ADE80' }}>{m.tipo === 'ingreso' ? `$ ${fmt(m.monto_ars)}` : '—'}</td>
                     <td style={{ padding: '10px 14px', fontFamily: 'monospace', color: '#F87171' }}>{m.tipo === 'egreso' ? `$ ${fmt(m.monto_ars)}` : '—'}</td>
+                    <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>
+                      <button onClick={() => setEditandoMov({ ...m, monto_ars: m.monto_ars ? String(m.monto_ars) : '', monto_usd: m.monto_usd ? String(m.monto_usd) : '' })}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, marginRight: 4, opacity: 0.5 }} title="Editar">✏️</button>
+                      {confirmDelMov === m.id ? (
+                        <>
+                          <button onClick={() => eliminarMov(m.id)} style={{ background: '#EF4444', color: '#fff', border: 'none', borderRadius: 3, fontSize: 10, padding: '2px 6px', cursor: 'pointer', marginRight: 4 }}>Sí</button>
+                          <button onClick={() => setConfirmDelMov(null)} style={{ background: 'var(--border)', color: 'var(--text-secondary)', border: 'none', borderRadius: 3, fontSize: 10, padding: '2px 6px', cursor: 'pointer' }}>No</button>
+                        </>
+                      ) : (
+                        <button onClick={() => setConfirmDelMov(m.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, opacity: 0.3, color: '#F87171' }}
+                          onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
+                          onMouseLeave={e => (e.currentTarget.style.opacity = '0.3')}>✕</button>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -486,19 +596,30 @@ export default function CajaClient({ cajas, movimientosIniciales, obraId, ordene
                           </span>
                         </td>
                         <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
+                          <button onClick={() => setEditandoCheque({ ...c, monto: String(c.monto) })}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, marginRight: 4, opacity: 0.5 }} title="Editar">✏️</button>
                           {c.estado === 'emitido' && (
                             confirmCambio?.id === c.id ? (
-                              <div style={{ display: 'flex', gap: 4 }}>
+                              <div style={{ display: 'inline-flex', gap: 4 }}>
                                 <button onClick={() => cambiarEstadoCheque(c.id, confirmCambio!.estado)} style={{ background: '#16a34a', color: '#fff', border: 'none', borderRadius: 4, fontSize: 10, padding: '3px 8px', cursor: 'pointer' }}>Sí</button>
                                 <button onClick={() => setConfirmCambio(null)} style={{ background: 'var(--border)', color: 'var(--text-secondary)', border: 'none', borderRadius: 4, fontSize: 10, padding: '3px 8px', cursor: 'pointer' }}>No</button>
                               </div>
                             ) : (
-                              <div style={{ display: 'flex', gap: 4 }}>
-                                <button onClick={() => setConfirmCambio({ id: c.id, estado: 'depositado' })} style={{ background: 'rgba(34,197,94,0.12)', color: '#4ADE80', border: '1px solid rgba(34,197,94,0.2)', borderRadius: 4, fontSize: 10, padding: '3px 8px', cursor: 'pointer' }}>✓ Depositado</button>
-                                <button onClick={() => setConfirmCambio({ id: c.id, estado: 'rechazado' })} style={{ background: 'rgba(239,68,68,0.1)', color: '#F87171', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 4, fontSize: 10, padding: '3px 8px', cursor: 'pointer' }}>✕ Rechazado</button>
-                                <button onClick={() => setConfirmCambio({ id: c.id, estado: 'anulado' })} style={{ background: 'var(--tag-bg)', color: 'var(--text-muted)', border: '1px solid var(--border)', borderRadius: 4, fontSize: 10, padding: '3px 8px', cursor: 'pointer' }}>Anular</button>
+                              <div style={{ display: 'inline-flex', gap: 4 }}>
+                                <button onClick={() => setConfirmCambio({ id: c.id, estado: 'depositado' })} style={{ background: 'rgba(34,197,94,0.12)', color: '#4ADE80', border: '1px solid rgba(34,197,94,0.2)', borderRadius: 4, fontSize: 10, padding: '3px 8px', cursor: 'pointer' }}>✓ Dep.</button>
+                                <button onClick={() => setConfirmCambio({ id: c.id, estado: 'rechazado' })} style={{ background: 'rgba(239,68,68,0.1)', color: '#F87171', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 4, fontSize: 10, padding: '3px 8px', cursor: 'pointer' }}>✕ Rech.</button>
                               </div>
                             )
+                          )}
+                          {confirmDelCheque === c.id ? (
+                            <>
+                              <button onClick={() => eliminarCheque(c.id)} style={{ background: '#EF4444', color: '#fff', border: 'none', borderRadius: 3, fontSize: 10, padding: '2px 6px', cursor: 'pointer', marginRight: 4, marginLeft: 4 }}>Sí</button>
+                              <button onClick={() => setConfirmDelCheque(null)} style={{ background: 'var(--border)', color: 'var(--text-secondary)', border: 'none', borderRadius: 3, fontSize: 10, padding: '2px 6px', cursor: 'pointer' }}>No</button>
+                            </>
+                          ) : (
+                            <button onClick={() => setConfirmDelCheque(c.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, opacity: 0.3, color: '#F87171', marginLeft: 4 }}
+                              onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
+                              onMouseLeave={e => (e.currentTarget.style.opacity = '0.3')}>✕</button>
                           )}
                         </td>
                       </tr>
@@ -570,6 +691,153 @@ export default function CajaClient({ cajas, movimientosIniciales, obraId, ordene
             <button onClick={guardarCheque} disabled={guardando} style={{ background: 'var(--accent)', color: 'var(--accent-contrast)', border: 'none', borderRadius: 6, padding: '8px 20px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'system-ui' }}>
               {guardando ? 'Guardando...' : '✓ Registrar cheque'}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Papelera */}
+      {tab === 'papelera' && (
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: '#F87171', marginBottom: 20 }}>🗑️ Papelera · elementos eliminados</div>
+          {papeleraMovs.length === 0 && papeleraCheques.length === 0 ? (
+            <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>
+              La papelera está vacía.
+            </div>
+          ) : (
+            <>
+              {papeleraMovs.length > 0 && (
+                <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden', marginBottom: 20 }}>
+                  <div style={{ padding: '12px 18px', borderBottom: '1px solid var(--border)', fontSize: 13, fontWeight: 600 }}>Movimientos eliminados · {papeleraMovs.length}</div>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <tbody>
+                      {papeleraMovs.map((m, i) => (
+                        <tr key={m.id} style={{ borderTop: i > 0 ? '1px solid var(--border)' : 'none', opacity: 0.7 }}>
+                          <td style={{ padding: '10px 18px', fontFamily: 'monospace', fontSize: 12, color: 'var(--text-muted)', width: 90 }}>{m.fecha}</td>
+                          <td style={{ padding: '10px 18px' }}>{m.concepto}</td>
+                          <td style={{ padding: '10px 18px', fontSize: 12, color: 'var(--text-secondary)' }}>{m.contraparte || '—'}</td>
+                          <td style={{ padding: '10px 18px', fontFamily: 'monospace', color: m.tipo === 'ingreso' ? '#4ADE80' : '#F87171' }}>
+                            {m.tipo === 'ingreso' ? '+ ' : '- '}$ {fmt(m.monto_ars)}
+                          </td>
+                          <td style={{ padding: '10px 18px', textAlign: 'right' }}>
+                            <button onClick={() => restaurarMov(m)} style={{ background: 'rgba(59,130,246,0.12)', color: '#60A5FA', border: '1px solid rgba(59,130,246,0.3)', borderRadius: 6, padding: '4px 12px', fontSize: 12, cursor: 'pointer', fontFamily: 'system-ui' }}>
+                              ↩ Restaurar
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {papeleraCheques.length > 0 && (
+                <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
+                  <div style={{ padding: '12px 18px', borderBottom: '1px solid var(--border)', fontSize: 13, fontWeight: 600 }}>Cheques eliminados · {papeleraCheques.length}</div>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <tbody>
+                      {papeleraCheques.map((c, i) => (
+                        <tr key={c.id} style={{ borderTop: i > 0 ? '1px solid var(--border)' : 'none', opacity: 0.7 }}>
+                          <td style={{ padding: '10px 18px', fontFamily: 'monospace', fontWeight: 600 }}>N°{c.numero}</td>
+                          <td style={{ padding: '10px 18px', fontSize: 12, color: 'var(--text-secondary)' }}>{c.banco || '—'}</td>
+                          <td style={{ padding: '10px 18px' }}>{c.beneficiario || '—'}</td>
+                          <td style={{ padding: '10px 18px', fontFamily: 'monospace', fontSize: 12 }}>{c.fecha_vencimiento}</td>
+                          <td style={{ padding: '10px 18px', fontFamily: 'monospace', fontWeight: 600, color: '#F0C060' }}>$ {fmt(c.monto)}</td>
+                          <td style={{ padding: '10px 18px', textAlign: 'right' }}>
+                            <button onClick={() => restaurarCheque(c)} style={{ background: 'rgba(59,130,246,0.12)', color: '#60A5FA', border: '1px solid rgba(59,130,246,0.3)', borderRadius: 6, padding: '4px 12px', fontSize: 12, cursor: 'pointer', fontFamily: 'system-ui' }}>
+                              ↩ Restaurar
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Modal edición movimiento */}
+      {editandoMov && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 }}>
+          <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12, padding: 28, width: 480, maxWidth: '90vw' }}>
+            <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 20 }}>Editar movimiento</h3>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 16 }}>
+              <div>
+                <label style={labelStyle}>Fecha</label>
+                <input type="date" value={editandoMov.fecha} onChange={e => setEditandoMov((d: any) => ({...d, fecha: e.target.value}))} style={inputStyle}/>
+              </div>
+              <div>
+                <label style={labelStyle}>Tipo</label>
+                <select value={editandoMov.tipo} onChange={e => setEditandoMov((d: any) => ({...d, tipo: e.target.value}))} style={inputStyle}>
+                  <option value="ingreso">Ingreso</option>
+                  <option value="egreso">Egreso</option>
+                </select>
+              </div>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label style={labelStyle}>Concepto</label>
+                <input value={editandoMov.concepto} onChange={e => setEditandoMov((d: any) => ({...d, concepto: e.target.value}))} style={inputStyle}/>
+              </div>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label style={labelStyle}>Contraparte</label>
+                <input value={editandoMov.contraparte || ''} onChange={e => setEditandoMov((d: any) => ({...d, contraparte: e.target.value}))} style={inputStyle}/>
+              </div>
+              <div>
+                <label style={labelStyle}>Monto ARS $</label>
+                <input type="number" value={editandoMov.monto_ars} onChange={e => setEditandoMov((d: any) => ({...d, monto_ars: e.target.value}))} style={inputStyle}/>
+              </div>
+              <div>
+                <label style={labelStyle}>Monto USD</label>
+                <input type="number" value={editandoMov.monto_usd} onChange={e => setEditandoMov((d: any) => ({...d, monto_usd: e.target.value}))} style={inputStyle}/>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button onClick={() => setEditandoMov(null)} style={{ background: 'transparent', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 6, padding: '8px 16px', fontSize: 13, cursor: 'pointer', fontFamily: 'system-ui' }}>Cancelar</button>
+              <button onClick={guardarEdicionMov} disabled={guardando} style={{ background: 'var(--accent)', color: 'var(--accent-contrast)', border: 'none', borderRadius: 6, padding: '8px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'system-ui' }}>
+                {guardando ? 'Guardando...' : '✓ Guardar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal edición cheque */}
+      {editandoCheque && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 }}>
+          <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12, padding: 28, width: 480, maxWidth: '90vw' }}>
+            <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 20 }}>Editar cheque N°{editandoCheque.numero}</h3>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 16 }}>
+              <div>
+                <label style={labelStyle}>N° cheque</label>
+                <input value={editandoCheque.numero} onChange={e => setEditandoCheque((d: any) => ({...d, numero: e.target.value}))} style={inputStyle}/>
+              </div>
+              <div>
+                <label style={labelStyle}>Banco</label>
+                <input value={editandoCheque.banco || ''} onChange={e => setEditandoCheque((d: any) => ({...d, banco: e.target.value}))} style={inputStyle}/>
+              </div>
+              <div>
+                <label style={labelStyle}>Monto $</label>
+                <input type="number" value={editandoCheque.monto} onChange={e => setEditandoCheque((d: any) => ({...d, monto: e.target.value}))} style={inputStyle}/>
+              </div>
+              <div>
+                <label style={labelStyle}>Fecha vencimiento</label>
+                <input type="date" value={editandoCheque.fecha_vencimiento} onChange={e => setEditandoCheque((d: any) => ({...d, fecha_vencimiento: e.target.value}))} style={inputStyle}/>
+              </div>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label style={labelStyle}>Beneficiario</label>
+                <input value={editandoCheque.beneficiario || ''} onChange={e => setEditandoCheque((d: any) => ({...d, beneficiario: e.target.value}))} style={inputStyle}/>
+              </div>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label style={labelStyle}>Notas</label>
+                <input value={editandoCheque.notas || ''} onChange={e => setEditandoCheque((d: any) => ({...d, notas: e.target.value}))} style={inputStyle}/>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button onClick={() => setEditandoCheque(null)} style={{ background: 'transparent', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 6, padding: '8px 16px', fontSize: 13, cursor: 'pointer', fontFamily: 'system-ui' }}>Cancelar</button>
+              <button onClick={guardarEdicionCheque} disabled={guardando} style={{ background: 'var(--accent)', color: 'var(--accent-contrast)', border: 'none', borderRadius: 6, padding: '8px 18px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'system-ui' }}>
+                {guardando ? 'Guardando...' : '✓ Guardar'}
+              </button>
+            </div>
           </div>
         </div>
       )}
