@@ -25,7 +25,7 @@ export default function CajaClient({ cajas, movimientosIniciales, obraId, ordene
   const [ordenes, setOrdenes] = useState(ordenesPendientes)
   const [cheques, setCheques] = useState(chequesIniciales)
   const [cajaActiva, setCajaActiva] = useState<string>(() => cajas?.[0]?.id ?? '')
-  const [tab, setTab] = useState<'movimientos'|'nuevo'|'cheques'|'nuevo_cheque'|'papelera'>(opPreseleccionada ? 'nuevo' : 'movimientos')
+  const [tab, setTab] = useState<'movimientos'|'nuevo'|'cheques'|'nuevo_cheque'|'papelera'|'importar'>(opPreseleccionada ? 'nuevo' : 'movimientos')
   const [guardando, setGuardando] = useState(false)
   const [mensaje, setMensaje] = useState('')
   const [ordenSeleccionada, setOrdenSeleccionada] = useState<string>(opPreseleccionada || '')
@@ -44,6 +44,12 @@ export default function CajaClient({ cajas, movimientosIniciales, obraId, ordene
   const [papeleraMovs, setPapeleraMovs] = useState<any[]>([])
   const [papeleraCheques, setPapeleraCheques] = useState<any[]>([])
   const [papeleraCargada, setPapeleraCargada] = useState(false)
+
+  // Importador de extractos
+  const [importPreview, setImportPreview] = useState<any[]>([])
+  const [importSeleccion, setImportSeleccion] = useState<Set<number>>(new Set())
+  const [importando, setImportando] = useState(false)
+  const [importNombre, setImportNombre] = useState('')
 
   useEffect(() => {
     fetch('https://dolarapi.com/v1/dolares/blue')
@@ -312,6 +318,166 @@ export default function CajaClient({ cajas, movimientosIniciales, obraId, ordene
 
   const totalPapelera = papeleraMovs.length + papeleraCheques.length
 
+  // ── Parsers de extracto ──────────────────────────────────────────────────
+  const parsearOFX = (texto: string): any[] => {
+    const txs: any[] = []
+    // Normalizar: OFX usa SGML, no siempre es XML válido
+    const bloques = texto.match(/<STMTTRN[\s\S]*?<\/STMTTRN>/gi) || []
+    for (const bloque of bloques) {
+      const get = (tag: string) => {
+        const m = bloque.match(new RegExp(`<${tag}>([^<\r\n]+)`, 'i'))
+        return m ? m[1].trim() : ''
+      }
+      const dtraw = get('DTPOSTED') || get('DTAVAIL')
+      if (!dtraw) continue
+      const fecha = `${dtraw.substring(0,4)}-${dtraw.substring(4,6)}-${dtraw.substring(6,8)}`
+      const monto = parseFloat(get('TRNAMT'))
+      if (isNaN(monto)) continue
+      const concepto = get('MEMO') || get('NAME') || get('TRNTYPE') || 'Movimiento bancario'
+      const fitid = get('FITID')
+      txs.push({ fecha, monto, concepto, fitid })
+    }
+    return txs
+  }
+
+  const parsearCSV = (texto: string): any[] => {
+    const txs: any[] = []
+    // Detectar separador: ; o ,
+    const sep = texto.includes(';') ? ';' : ','
+    const lineas = texto.split('\n').map(l => l.trim()).filter(Boolean)
+    if (lineas.length < 2) return txs
+
+    const header = lineas[0].toLowerCase()
+    // Intentar detectar columnas por nombre de cabecera
+    const cols = header.split(sep).map(c => c.replace(/"/g,'').trim())
+    const ci = (names: string[]) => cols.findIndex(c => names.some(n => c.includes(n)))
+
+    const iFecha   = ci(['fecha','date'])
+    const iDesc    = ci(['descripci','concepto','detalle','memo'])
+    const iDebito  = ci(['débito','debito','debit','egreso','cargo'])
+    const iCredito = ci(['crédito','credito','credit','ingreso','abono','haber'])
+    const iMonto   = ci(['monto','importe','amount'])
+    const iRef     = ci(['referencia','ref','id','número','numero'])
+
+    for (let i = 1; i < lineas.length; i++) {
+      const partes = lineas[i].split(sep).map(p => p.replace(/"/g,'').trim())
+      if (partes.length < 2) continue
+
+      // Parsear fecha en formato DD/MM/YYYY o YYYY-MM-DD o DD-MM-YYYY
+      const fechaRaw = iFecha >= 0 ? partes[iFecha] : ''
+      let fecha = ''
+      const m1 = fechaRaw.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/)
+      const m2 = fechaRaw.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/)
+      if (m2) {
+        fecha = `${m2[1]}-${m2[2].padStart(2,'0')}-${m2[3].padStart(2,'0')}`
+      } else if (m1) {
+        const year = m1[3].length === 2 ? `20${m1[3]}` : m1[3]
+        fecha = `${year}-${m1[2].padStart(2,'0')}-${m1[1].padStart(2,'0')}`
+      }
+      if (!fecha) continue
+
+      // Parsear monto (formato argentino: "1.234,56" → 1234.56)
+      const parseMonto = (s: string) =>
+        parseFloat((s || '0').replace(/\./g,'').replace(',','.')) || 0
+
+      let monto = 0
+      if (iMonto >= 0) {
+        monto = parseMonto(partes[iMonto])
+      } else {
+        const deb = parseMonto(iDebito >= 0 ? partes[iDebito] : '0')
+        const cred = parseMonto(iCredito >= 0 ? partes[iCredito] : '0')
+        monto = cred > 0 ? cred : -deb
+      }
+      if (monto === 0) continue
+
+      const concepto = iDesc >= 0 ? partes[iDesc] : 'Movimiento bancario'
+      const fitid    = iRef >= 0 ? partes[iRef] : ''
+      txs.push({ fecha, monto, concepto, fitid })
+    }
+    return txs
+  }
+
+  const procesarArchivo = (file: File) => {
+    if (!file) return
+    setImportNombre(file.name)
+    setImportPreview([])
+    setImportSeleccion(new Set())
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      const texto = e.target?.result as string
+      if (!texto) return
+      const ext = file.name.split('.').pop()?.toLowerCase()
+      let txs: any[] = []
+      if (ext === 'ofx' || ext === 'qfx') {
+        txs = parsearOFX(texto)
+      } else if (ext === 'csv' || ext === 'txt') {
+        txs = parsearCSV(texto)
+      }
+      if (txs.length === 0) {
+        flash('❌ No se encontraron movimientos en el archivo. Verificá el formato.')
+        return
+      }
+      // Marcar posibles duplicados comparando con movimientos existentes
+      const movsCaja = movimientos.filter(m => m.caja_id === cajaActiva)
+      const txsConInfo = txs.map(tx => {
+        const tipo = tx.monto >= 0 ? 'ingreso' : 'egreso'
+        const monto_ars = Math.abs(tx.monto)
+        const esDuplicado = movsCaja.some(m =>
+          m.fecha === tx.fecha &&
+          Math.abs((m.monto_ars || m.monto_usd || 0) - monto_ars) < 1
+        )
+        return { ...tx, tipo, monto_ars, esDuplicado }
+      })
+      setImportPreview(txsConInfo)
+      // Pre-seleccionar todos los no duplicados
+      const sel = new Set<number>()
+      txsConInfo.forEach((tx, i) => { if (!tx.esDuplicado) sel.add(i) })
+      setImportSeleccion(sel)
+    }
+    reader.readAsText(file, 'latin1') // Galicia usa latin1/ISO-8859-1
+  }
+
+  const ejecutarImportacion = async () => {
+    if (importSeleccion.size === 0) { flash('❌ Seleccioná al menos un movimiento'); return }
+    setImportando(true)
+    const rows = importPreview
+      .filter((_, i) => importSeleccion.has(i))
+      .map(tx => ({
+        caja_id: cajaActiva,
+        obra_id: obraId,
+        fecha: tx.fecha,
+        tipo: tx.tipo,
+        concepto: tx.concepto,
+        contraparte: null,
+        monto_ars: tx.monto_ars,
+        monto_usd: null,
+        tc_blue: null,
+        origen: 'manual',
+      }))
+
+    const BATCH = 50
+    let ok = 0
+    for (let i = 0; i < rows.length; i += BATCH) {
+      const { data, error } = await supabase
+        .from('movimientos_caja')
+        .insert(rows.slice(i, i + BATCH))
+        .select()
+      if (error) { flash('❌ Error importando: ' + error.message); break }
+      if (data) {
+        setMovimientos(ms => [...data, ...ms])
+        ok += data.length
+      }
+    }
+    if (ok > 0) {
+      flash(`✓ ${ok} movimiento${ok > 1 ? 's' : ''} importado${ok > 1 ? 's' : ''} correctamente`)
+      setImportPreview([])
+      setImportSeleccion(new Set())
+      setImportNombre('')
+      setTab('movimientos')
+    }
+    setImportando(false)
+  }
+
   return (
     <>
       {mensaje && (
@@ -398,6 +564,7 @@ export default function CajaClient({ cajas, movimientosIniciales, obraId, ordene
           { key: 'cheques', label: `🏦 Cheques · ${cheques.filter(c => c.estado === 'emitido').length} emitidos` },
           { key: 'nuevo_cheque', label: '＋ Nuevo cheque' },
           { key: 'papelera', label: `🗑️ Papelera${totalPapelera > 0 ? ` · ${totalPapelera}` : ''}` },
+          { key: 'importar', label: '📥 Importar extracto' },
         ].map(t => (
           <div key={t.key} onClick={() => { setTab(t.key as any); if (t.key === 'papelera') cargarPapelera() }} style={{
             padding: '10px 18px', fontSize: 13, fontWeight: 500, cursor: 'pointer',
@@ -752,6 +919,143 @@ export default function CajaClient({ cajas, movimientosIniciales, obraId, ordene
                   </table>
                 </div>
               )}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Importar extracto */}
+      {tab === 'importar' && (
+        <div style={{ maxWidth: 860 }}>
+          {/* Info */}
+          <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, padding: '16px 20px', marginBottom: 20 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>📥 Importar extracto bancario</div>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>
+              Los movimientos se importarán a la caja activa: <strong style={{ color: 'var(--text-primary)' }}>{cajas.find(c => c.id === cajaActiva)?.nombre}</strong>
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <div>• <strong>OFX / QFX</strong> — descargalo desde Galicia Empresas → Extractos → Exportar → formato OFX</div>
+              <div>• <strong>CSV / TXT</strong> — exportación en texto plano, separado por punto y coma o coma</div>
+              <div>• Los movimientos con fecha y monto coincidentes al extracto existente se marcan como posibles duplicados</div>
+            </div>
+          </div>
+
+          {/* Upload zone */}
+          <div
+            style={{ border: '2px dashed var(--border)', borderRadius: 10, padding: '36px 20px', textAlign: 'center', marginBottom: 20, cursor: 'pointer', transition: 'border-color 0.2s' }}
+            onDragOver={e => { e.preventDefault(); e.currentTarget.style.borderColor = 'var(--accent)' }}
+            onDragLeave={e => { e.currentTarget.style.borderColor = 'var(--border)' }}
+            onDrop={e => { e.preventDefault(); e.currentTarget.style.borderColor = 'var(--border)'; const f = e.dataTransfer.files[0]; if (f) procesarArchivo(f) }}
+            onClick={() => document.getElementById('import-file-input')?.click()}
+          >
+            <div style={{ fontSize: 32, marginBottom: 10 }}>📂</div>
+            <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 6 }}>
+              {importNombre ? `Archivo cargado: ${importNombre}` : 'Arrastrá el archivo acá o hacé click para seleccionarlo'}
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>OFX, QFX, CSV, TXT</div>
+            <input
+              id="import-file-input"
+              type="file"
+              accept=".ofx,.qfx,.csv,.txt"
+              style={{ display: 'none' }}
+              onChange={e => { const f = e.target.files?.[0]; if (f) procesarArchivo(f); e.target.value = '' }}
+            />
+          </div>
+
+          {/* Preview */}
+          {importPreview.length > 0 && (
+            <>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <div style={{ fontSize: 14, fontWeight: 600 }}>
+                  Vista previa · {importPreview.length} movimientos encontrados
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 400, marginLeft: 10 }}>
+                    {importSeleccion.size} seleccionados · {importPreview.filter(t => t.esDuplicado).length} posibles duplicados
+                  </span>
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    onClick={() => setImportSeleccion(new Set(importPreview.map((_, i) => i)))}
+                    style={{ background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-secondary)', padding: '5px 12px', fontSize: 12, cursor: 'pointer', fontFamily: 'system-ui' }}
+                  >Seleccionar todos</button>
+                  <button
+                    onClick={() => {
+                      const nodup = new Set<number>()
+                      importPreview.forEach((t, i) => { if (!t.esDuplicado) nodup.add(i) })
+                      setImportSeleccion(nodup)
+                    }}
+                    style={{ background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-secondary)', padding: '5px 12px', fontSize: 12, cursor: 'pointer', fontFamily: 'system-ui' }}
+                  >Solo nuevos</button>
+                  <button
+                    onClick={() => setImportSeleccion(new Set())}
+                    style={{ background: 'transparent', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-secondary)', padding: '5px 12px', fontSize: 12, cursor: 'pointer', fontFamily: 'system-ui' }}
+                  >Deseleccionar</button>
+                </div>
+              </div>
+
+              <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden', marginBottom: 20 }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ background: 'var(--bg-table-head)' }}>
+                      <th style={{ padding: '9px 14px', width: 36 }}></th>
+                      {['Fecha','Concepto','Tipo','Monto','Estado'].map(h => (
+                        <th key={h} style={{ padding: '9px 14px', textAlign: 'left', fontSize: 11, color: 'var(--text-muted)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: 0.5 }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {importPreview.map((tx, i) => (
+                      <tr key={i} style={{
+                        borderTop: '1px solid var(--border)',
+                        opacity: importSeleccion.has(i) ? 1 : 0.4,
+                        background: tx.esDuplicado ? 'rgba(245,158,11,0.04)' : 'transparent',
+                      }}>
+                        <td style={{ padding: '8px 14px' }}>
+                          <input
+                            type="checkbox"
+                            checked={importSeleccion.has(i)}
+                            onChange={e => {
+                              const s = new Set(importSeleccion)
+                              e.target.checked ? s.add(i) : s.delete(i)
+                              setImportSeleccion(s)
+                            }}
+                            style={{ cursor: 'pointer', width: 15, height: 15 }}
+                          />
+                        </td>
+                        <td style={{ padding: '8px 14px', fontFamily: 'monospace', fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{tx.fecha}</td>
+                        <td style={{ padding: '8px 14px', fontSize: 13, maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tx.concepto}</td>
+                        <td style={{ padding: '8px 14px' }}>
+                          <span style={{ background: tx.tipo === 'ingreso' ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.1)', color: tx.tipo === 'ingreso' ? '#4ADE80' : '#F87171', padding: '2px 8px', borderRadius: 20, fontSize: 11 }}>
+                            {tx.tipo === 'ingreso' ? '↑ Ingreso' : '↓ Egreso'}
+                          </span>
+                        </td>
+                        <td style={{ padding: '8px 14px', fontFamily: 'monospace', fontWeight: 600, color: tx.tipo === 'ingreso' ? '#4ADE80' : '#F87171' }}>
+                          {tx.tipo === 'egreso' ? '-' : ''}$ {fmt(tx.monto_ars)}
+                        </td>
+                        <td style={{ padding: '8px 14px' }}>
+                          {tx.esDuplicado
+                            ? <span style={{ background: 'rgba(245,158,11,0.12)', color: '#F59E0B', padding: '2px 8px', borderRadius: 20, fontSize: 11 }}>⚠ Posible duplicado</span>
+                            : <span style={{ background: 'rgba(34,197,94,0.08)', color: '#4ADE80', padding: '2px 8px', borderRadius: 20, fontSize: 11 }}>Nuevo</span>
+                          }
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+                <button
+                  onClick={() => { setImportPreview([]); setImportNombre('') }}
+                  style={{ background: 'transparent', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 6, padding: '10px 20px', fontSize: 13, cursor: 'pointer', fontFamily: 'system-ui' }}
+                >Cancelar</button>
+                <button
+                  onClick={ejecutarImportacion}
+                  disabled={importando || importSeleccion.size === 0}
+                  style={{ background: 'var(--accent)', color: 'var(--accent-contrast)', border: 'none', borderRadius: 6, padding: '10px 24px', fontSize: 14, fontWeight: 600, cursor: importSeleccion.size === 0 ? 'not-allowed' : 'pointer', opacity: importSeleccion.size === 0 ? 0.5 : 1, fontFamily: 'system-ui' }}
+                >
+                  {importando ? 'Importando...' : `✓ Importar ${importSeleccion.size} movimiento${importSeleccion.size !== 1 ? 's' : ''}`}
+                </button>
+              </div>
             </>
           )}
         </div>
