@@ -22,7 +22,7 @@ export default function RegisterPage() {
     if (password.length < 6) return setError('La contraseña debe tener al menos 6 caracteres')
     setLoading(true)
     setError('')
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -32,9 +32,16 @@ export default function RegisterPage() {
     if (error) {
       setError('Error al crear la cuenta. Verificá los datos.')
       setLoading(false)
-    } else {
-      router.push('/welcome')
+      return
     }
+    if (data.user) {
+      await fetch('/api/setup-account', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: data.user.id, email, nombre, empresa }),
+      })
+    }
+    router.push('/welcome')
   }
 
   return (
