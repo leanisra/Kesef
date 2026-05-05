@@ -29,8 +29,11 @@ export default function CajaClient({ cajas, movimientosIniciales, obraId, ordene
   const [guardando, setGuardando] = useState(false)
   const [mensaje, setMensaje] = useState('')
   const [ordenSeleccionada, setOrdenSeleccionada] = useState<string>(opPreseleccionada || '')
-  const [tcHoy, setTcHoy] = useState<number>(1415)
+  const [tcHoy, setTcHoy] = useState<number>(1395)
   const [tcLabel, setTcLabel] = useState<string>('cargando...')
+  const [tcOficial, setTcOficial] = useState<number>(1400)
+  const [tcOficialLabel, setTcOficialLabel] = useState<string>('cargando...')
+  const [mostrarUSD, setMostrarUSD] = useState(false)
   const [filtroEstado, setFiltroEstado] = useState('todos')
   const [confirmCambio, setConfirmCambio] = useState<{id: string, estado: string}|null>(null)
 
@@ -52,14 +55,17 @@ export default function CajaClient({ cajas, movimientosIniciales, obraId, ordene
   const [importNombre, setImportNombre] = useState('')
 
   useEffect(() => {
-    fetch('https://dolarapi.com/v1/dolares/blue')
-      .then(r => r.json())
-      .then(d => {
-        const promedio = Math.round((d.compra + d.venta) / 2)
-        setTcHoy(promedio)
-        setTcLabel(`$ ${promedio.toLocaleString('es-AR')}`)
-      })
-      .catch(() => setTcLabel('$ 1.415'))
+    Promise.all([
+      fetch('https://dolarapi.com/v1/dolares/blue').then(r => r.json()),
+      fetch('https://dolarapi.com/v1/dolares/oficial').then(r => r.json()),
+    ]).then(([blue, oficial]) => {
+      const promedioBlue = Math.round((blue.compra + blue.venta) / 2)
+      setTcHoy(promedioBlue)
+      setTcLabel(`$ ${promedioBlue.toLocaleString('es-AR')}`)
+      const promedioOficial = Math.round((oficial.compra + oficial.venta) / 2)
+      setTcOficial(promedioOficial)
+      setTcOficialLabel(`$ ${promedioOficial.toLocaleString('es-AR')}`)
+    }).catch(() => { setTcLabel('$ 1.395'); setTcOficialLabel('$ 1.400') })
   }, [])
 
   useEffect(() => {
@@ -275,6 +281,11 @@ export default function CajaClient({ cajas, movimientosIniciales, obraId, ordene
   const movsFiltrados = movimientos.filter(m => m.caja_id === cajaActiva)
   const ingresos = movsFiltrados.filter(m => m.tipo === 'ingreso').reduce((a, m) => a + (m.monto_ars || 0), 0)
   const egresos = movsFiltrados.filter(m => m.tipo === 'egreso').reduce((a, m) => a + (m.monto_ars || 0), 0)
+  const egresosUSD = movsFiltrados.filter(m => m.tipo === 'egreso').reduce((a, m) => {
+    if (m.monto_usd) return a + m.monto_usd
+    return a + (m.monto_ars || 0) / (m.tc_blue || tcHoy)
+  }, 0)
+  const fmtUSD = (n: number) => n.toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
 
   const hoy = new Date(); hoy.setHours(0,0,0,0)
   const en7dias = new Date(hoy.getTime() + 7*24*60*60*1000)
@@ -487,10 +498,14 @@ export default function CajaClient({ cajas, movimientosIniciales, obraId, ordene
         }}>{mensaje}</div>
       )}
 
-      {/* TC Blue */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
+      {/* TC Oficial + Blue */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16, gap: 8, flexWrap: 'wrap' }}>
         <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 16px', fontSize: 13 }}>
-          <span style={{ color: 'var(--text-muted)' }}>TC Blue hoy · </span>
+          <span style={{ color: 'var(--text-muted)' }}>TC Oficial · </span>
+          <span style={{ color: 'var(--text-secondary)', fontFamily: 'monospace', fontWeight: 600 }}>{tcOficialLabel}</span>
+        </div>
+        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 16px', fontSize: 13 }}>
+          <span style={{ color: 'var(--text-muted)' }}>TC Blue · </span>
           <span style={{ color: '#F0C060', fontFamily: 'monospace', fontWeight: 600 }}>{tcLabel}</span>
         </div>
       </div>
@@ -577,7 +592,7 @@ export default function CajaClient({ cajas, movimientosIniciales, obraId, ordene
       {/* Movimientos */}
       {tab === 'movimientos' && (
         <>
-          <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>
+          <div style={{ display: 'flex', gap: 12, marginBottom: 20, alignItems: 'stretch' }}>
             {[
               { label: 'Ingresos', valor: ingresos, color: '#4ADE80' },
               { label: 'Egresos', valor: egresos, color: '#F87171' },
@@ -590,13 +605,26 @@ export default function CajaClient({ cajas, movimientosIniciales, obraId, ordene
                 </div>
               </div>
             ))}
+            <div style={{ background: 'var(--bg-card)', border: '1px solid rgba(96,165,250,0.4)', borderRadius: 8, padding: '12px 18px', minWidth: 140 }}>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1 }}>Egresos USD equiv.</div>
+              <div style={{ fontSize: 18, fontWeight: 700, fontFamily: 'monospace', color: '#60A5FA', marginTop: 4 }}>
+                USD {fmtUSD(egresosUSD)}
+              </div>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>al TC blue de cada mov.</div>
+            </div>
+            <button
+              onClick={() => setMostrarUSD(v => !v)}
+              style={{ background: mostrarUSD ? 'rgba(96,165,250,0.15)' : 'var(--bg-card)', border: `1px solid ${mostrarUSD ? '#60A5FA' : 'var(--border)'}`, borderRadius: 8, padding: '12px 16px', cursor: 'pointer', fontFamily: 'system-ui', fontSize: 12, color: mostrarUSD ? '#60A5FA' : 'var(--text-muted)', whiteSpace: 'nowrap' }}
+            >
+              {mostrarUSD ? '✓ Ocultar USD' : '$ Ver en USD'}
+            </button>
           </div>
           <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ background: 'var(--bg-table-head)' }}>
-                  {['Fecha','Concepto','Contraparte','Ingreso','Egreso',''].map(h => (
-                    <th key={h} style={{ padding: '9px 14px', textAlign: 'left', fontSize: 11, color: 'var(--text-muted)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: 0.5 }}>{h}</th>
+                  {['Fecha','Concepto','Contraparte','Ingreso','Egreso', ...(mostrarUSD ? ['USD equiv.','TC blue'] : []),''].map(h => (
+                    <th key={h} style={{ padding: '9px 14px', textAlign: 'left', fontSize: 11, color: h === 'USD equiv.' || h === 'TC blue' ? '#60A5FA' : 'var(--text-muted)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: 0.5 }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -615,6 +643,18 @@ export default function CajaClient({ cajas, movimientosIniciales, obraId, ordene
                     <td style={{ padding: '10px 14px', fontSize: 13, color: 'var(--text-secondary)' }}>{m.contraparte || '—'}</td>
                     <td style={{ padding: '10px 14px', fontFamily: 'monospace', color: '#4ADE80' }}>{m.tipo === 'ingreso' ? `$ ${fmt(m.monto_ars)}` : '—'}</td>
                     <td style={{ padding: '10px 14px', fontFamily: 'monospace', color: '#F87171' }}>{m.tipo === 'egreso' ? `$ ${fmt(m.monto_ars)}` : '—'}</td>
+                    {mostrarUSD && (() => {
+                      const tcMov = m.tc_blue || tcHoy
+                      const usd = m.monto_usd ? m.monto_usd : (m.monto_ars || 0) / tcMov
+                      return (<>
+                        <td style={{ padding: '10px 14px', fontFamily: 'monospace', color: '#60A5FA', fontSize: 12 }}>
+                          {m.monto_ars || m.monto_usd ? `USD ${fmtUSD(usd)}` : '—'}
+                        </td>
+                        <td style={{ padding: '10px 14px', fontFamily: 'monospace', color: 'var(--text-muted)', fontSize: 11 }}>
+                          {m.tc_blue ? `$ ${m.tc_blue.toLocaleString('es-AR')}` : <span style={{ opacity: 0.4 }}>hoy</span>}
+                        </td>
+                      </>)
+                    })()}
                     <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>
                       <button onClick={() => setEditandoMov({ ...m, monto_ars: m.monto_ars ? String(m.monto_ars) : '', monto_usd: m.monto_usd ? String(m.monto_usd) : '' })}
                         style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, marginRight: 4, opacity: 0.5 }} title="Editar">✏️</button>
