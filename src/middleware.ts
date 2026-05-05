@@ -35,15 +35,19 @@ export async function middleware(request: NextRequest) {
 
   // ── Chequeo de whitelist y suscripción ────────────────────────────────────
   try {
-    // 1. Whitelist: siempre pasan sin importar estado de suscripción
-    const { data: wl } = await supabase
+    // 1. Whitelist: usar service role para bypassear RLS
+    const supabaseAdmin = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { cookies: { getAll: () => [], setAll: () => {} } }
+    )
+    const { data: wl } = await supabaseAdmin
       .from('whitelist_admin')
       .select('email')
       .eq('email', user.email ?? '')
       .maybeSingle()
 
     if (wl) {
-      // Si intenta acceder a /admin, verificar que esté en whitelist (ya lo está)
       return response
     }
 
