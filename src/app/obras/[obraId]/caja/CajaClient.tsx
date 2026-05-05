@@ -644,31 +644,21 @@ export default function CajaClient({ cajas, movimientosIniciales, obraId, ordene
       )}
 
       {/* Tabs */}
-      <div style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid var(--border)', marginBottom: 24 }}>
-        <div style={{ display: 'flex', flex: 1 }}>
-          {[
-            { key: 'movimientos', label: `Movimientos · ${movsFiltrados.length}` },
-            { key: 'nuevo', label: '＋ Nuevo movimiento' },
-            { key: 'cheques', label: `🏦 Cheques · ${cheques.filter(c => c.estado === 'emitido').length} emitidos` },
-            { key: 'nuevo_cheque', label: '＋ Nuevo cheque' },
-            { key: 'papelera', label: `🗑️ Papelera${totalPapelera > 0 ? ` · ${totalPapelera}` : ''}` },
-            { key: 'importar', label: '📥 Importar extracto' },
-          ].map(t => (
-            <div key={t.key} onClick={() => { setTab(t.key as any); if (t.key === 'papelera') cargarPapelera() }} style={{
-              padding: '10px 18px', fontSize: 13, fontWeight: 500, cursor: 'pointer',
-              color: tab === t.key ? (t.key === 'papelera' ? '#F87171' : '#F0C060') : 'var(--text-muted)',
-              borderBottom: `2px solid ${tab === t.key ? (t.key === 'papelera' ? '#F87171' : '#F0C060') : 'transparent'}`,
-            }}>{t.label}</div>
-          ))}
-        </div>
-        {/* Toggle TC/USD — siempre visible en el header */}
-        <button
-          onClick={toggleMostrarUSD}
-          style={{ marginRight: 2, marginBottom: -1, background: mostrarUSD ? 'rgba(96,165,250,0.15)' : 'transparent', border: `1px solid ${mostrarUSD ? '#60A5FA' : 'var(--border)'}`, borderRadius: 6, padding: '5px 12px', cursor: 'pointer', fontFamily: 'system-ui', fontSize: 11, fontWeight: 600, color: mostrarUSD ? '#60A5FA' : 'var(--text-muted)', whiteSpace: 'nowrap', letterSpacing: 0.3 }}
-          title="Mostrar/ocultar columnas TC Blue y equivalente USD"
-        >
-          {cargandoTC ? '⏳ TC...' : mostrarUSD ? '≈ Ocultar TC/USD' : '≈ TC / USD'}
-        </button>
+      <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: 24 }}>
+        {[
+          { key: 'movimientos', label: `Movimientos · ${movsFiltrados.length}` },
+          { key: 'nuevo', label: '＋ Nuevo movimiento' },
+          { key: 'cheques', label: `🏦 Cheques · ${cheques.filter(c => c.estado === 'emitido').length} emitidos` },
+          { key: 'nuevo_cheque', label: '＋ Nuevo cheque' },
+          { key: 'papelera', label: `🗑️ Papelera${totalPapelera > 0 ? ` · ${totalPapelera}` : ''}` },
+          { key: 'importar', label: '📥 Importar extracto' },
+        ].map(t => (
+          <div key={t.key} onClick={() => { setTab(t.key as any); if (t.key === 'papelera') cargarPapelera() }} style={{
+            padding: '10px 18px', fontSize: 13, fontWeight: 500, cursor: 'pointer',
+            color: tab === t.key ? (t.key === 'papelera' ? '#F87171' : '#F0C060') : 'var(--text-muted)',
+            borderBottom: `2px solid ${tab === t.key ? (t.key === 'papelera' ? '#F87171' : '#F0C060') : 'transparent'}`,
+          }}>{t.label}</div>
+        ))}
       </div>
 
       {/* Movimientos */}
@@ -700,6 +690,24 @@ export default function CajaClient({ cajas, movimientosIniciales, obraId, ordene
               </div>
             )}
           </div>
+          {/* Toggle TC/USD — visible sobre la tabla */}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
+            <button
+              onClick={toggleMostrarUSD}
+              style={{
+                background: mostrarUSD ? 'rgba(96,165,250,0.15)' : 'var(--bg-card)',
+                border: `1px solid ${mostrarUSD ? '#60A5FA' : 'var(--border)'}`,
+                borderRadius: 8, padding: '8px 16px', cursor: 'pointer',
+                fontFamily: 'system-ui', fontSize: 13, fontWeight: 600,
+                color: mostrarUSD ? '#60A5FA' : 'var(--text-secondary)',
+                display: 'flex', alignItems: 'center', gap: 6,
+              }}
+            >
+              <span style={{ fontSize: 15 }}>≈</span>
+              {cargandoTC ? 'Cargando TC...' : mostrarUSD ? 'Ocultar TC / USD' : 'Ver TC / USD'}
+            </button>
+          </div>
+
           <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
