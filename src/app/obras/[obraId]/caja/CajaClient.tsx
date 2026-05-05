@@ -605,25 +605,27 @@ export default function CajaClient({ cajas, movimientosIniciales, obraId, ordene
                 </div>
               </div>
             ))}
-            <div style={{ background: 'var(--bg-card)', border: '1px solid rgba(96,165,250,0.4)', borderRadius: 8, padding: '12px 18px', minWidth: 140 }}>
-              <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1 }}>Egresos USD equiv.</div>
-              <div style={{ fontSize: 18, fontWeight: 700, fontFamily: 'monospace', color: '#60A5FA', marginTop: 4 }}>
-                USD {fmtUSD(egresosUSD)}
+            {cajaActivaObj?.moneda === 'ARS' && (<>
+              <div style={{ background: 'var(--bg-card)', border: '1px solid rgba(96,165,250,0.4)', borderRadius: 8, padding: '12px 18px', minWidth: 140 }}>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1 }}>Egresos equiv. USD</div>
+                <div style={{ fontSize: 18, fontWeight: 700, fontFamily: 'monospace', color: '#60A5FA', marginTop: 4 }}>
+                  USD {fmtUSD(egresosUSD)}
+                </div>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>al TC blue de cada mov.</div>
               </div>
-              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>al TC blue de cada mov.</div>
-            </div>
-            <button
-              onClick={() => setMostrarUSD(v => !v)}
-              style={{ background: mostrarUSD ? 'rgba(96,165,250,0.15)' : 'var(--bg-card)', border: `1px solid ${mostrarUSD ? '#60A5FA' : 'var(--border)'}`, borderRadius: 8, padding: '12px 16px', cursor: 'pointer', fontFamily: 'system-ui', fontSize: 12, color: mostrarUSD ? '#60A5FA' : 'var(--text-muted)', whiteSpace: 'nowrap' }}
-            >
-              {mostrarUSD ? '✓ Ocultar USD' : '$ Ver en USD'}
-            </button>
+              <button
+                onClick={() => setMostrarUSD(v => !v)}
+                style={{ background: mostrarUSD ? 'rgba(96,165,250,0.15)' : 'var(--bg-card)', border: `1px solid ${mostrarUSD ? '#60A5FA' : 'var(--border)'}`, borderRadius: 8, padding: '12px 16px', cursor: 'pointer', fontFamily: 'system-ui', fontSize: 12, color: mostrarUSD ? '#60A5FA' : 'var(--text-muted)', whiteSpace: 'nowrap' }}
+              >
+                {mostrarUSD ? '✓ Ocultar TC + USD' : '≈ Ver TC + USD'}
+              </button>
+            </>)}
           </div>
           <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ background: 'var(--bg-table-head)' }}>
-                  {['Fecha','Concepto','Contraparte','Ingreso','Egreso', ...(mostrarUSD ? ['USD equiv.','TC blue'] : []),''].map(h => (
+                  {['Fecha','Concepto','Contraparte','Ingreso','Egreso', ...(mostrarUSD && cajaActivaObj?.moneda === 'ARS' ? ['TC blue','USD equiv.'] : []),''].map(h => (
                     <th key={h} style={{ padding: '9px 14px', textAlign: 'left', fontSize: 11, color: h === 'USD equiv.' || h === 'TC blue' ? '#60A5FA' : 'var(--text-muted)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: 0.5 }}>{h}</th>
                   ))}
                 </tr>
@@ -643,15 +645,17 @@ export default function CajaClient({ cajas, movimientosIniciales, obraId, ordene
                     <td style={{ padding: '10px 14px', fontSize: 13, color: 'var(--text-secondary)' }}>{m.contraparte || '—'}</td>
                     <td style={{ padding: '10px 14px', fontFamily: 'monospace', color: '#4ADE80' }}>{m.tipo === 'ingreso' ? `$ ${fmt(m.monto_ars)}` : '—'}</td>
                     <td style={{ padding: '10px 14px', fontFamily: 'monospace', color: '#F87171' }}>{m.tipo === 'egreso' ? `$ ${fmt(m.monto_ars)}` : '—'}</td>
-                    {mostrarUSD && (() => {
+                    {mostrarUSD && cajaActivaObj?.moneda === 'ARS' && (() => {
                       const tcMov = m.tc_blue || tcHoy
-                      const usd = m.monto_usd ? m.monto_usd : (m.monto_ars || 0) / tcMov
+                      const usd = (m.monto_ars || 0) / tcMov
                       return (<>
-                        <td style={{ padding: '10px 14px', fontFamily: 'monospace', color: '#60A5FA', fontSize: 12 }}>
-                          {m.monto_ars || m.monto_usd ? `USD ${fmtUSD(usd)}` : '—'}
+                        <td style={{ padding: '10px 14px', fontFamily: 'monospace', color: 'var(--text-muted)', fontSize: 12 }}>
+                          {m.tc_blue
+                            ? `$ ${m.tc_blue.toLocaleString('es-AR')}`
+                            : <span style={{ color: '#F59E0B', fontSize: 11 }}>sin TC</span>}
                         </td>
-                        <td style={{ padding: '10px 14px', fontFamily: 'monospace', color: 'var(--text-muted)', fontSize: 11 }}>
-                          {m.tc_blue ? `$ ${m.tc_blue.toLocaleString('es-AR')}` : <span style={{ opacity: 0.4 }}>hoy</span>}
+                        <td style={{ padding: '10px 14px', fontFamily: 'monospace', color: '#60A5FA', fontSize: 12 }}>
+                          {m.monto_ars ? `USD ${fmtUSD(usd)}` : '—'}
                         </td>
                       </>)
                     })()}
