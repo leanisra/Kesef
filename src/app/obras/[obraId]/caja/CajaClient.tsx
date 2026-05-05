@@ -34,6 +34,7 @@ export default function CajaClient({ cajas, movimientosIniciales, obraId, ordene
   const [tcOficial, setTcOficial] = useState<number>(1400)
   const [tcOficialLabel, setTcOficialLabel] = useState<string>('cargando...')
   const [mostrarUSD, setMostrarUSD] = useState(false)
+  const [cargandoTC, setCargandoTC] = useState(false)
   const [filtroEstado, setFiltroEstado] = useState('todos')
   const [confirmCambio, setConfirmCambio] = useState<{id: string, estado: string}|null>(null)
 
@@ -54,19 +55,90 @@ export default function CajaClient({ cajas, movimientosIniciales, obraId, ordene
   const [importando, setImportando] = useState(false)
   const [importNombre, setImportNombre] = useState('')
 
+  // Persistencia toggle en localStorage
   useEffect(() => {
-    Promise.all([
-      fetch('https://dolarapi.com/v1/dolares/blue').then(r => r.json()),
-      fetch('https://dolarapi.com/v1/dolares/oficial').then(r => r.json()),
-    ]).then(([blue, oficial]) => {
-      const promedioBlue = Math.round((blue.compra + blue.venta) / 2)
-      setTcHoy(promedioBlue)
-      setTcLabel(`$ ${promedioBlue.toLocaleString('es-AR')}`)
-      const promedioOficial = Math.round((oficial.compra + oficial.venta) / 2)
-      setTcOficial(promedioOficial)
-      setTcOficialLabel(`$ ${promedioOficial.toLocaleString('es-AR')}`)
-    }).catch(() => { setTcLabel('$ 1.395'); setTcOficialLabel('$ 1.400') })
+    const saved = localStorage.getItem('caja-mostrar-usd')
+    if (saved === 'true') setMostrarUSD(true)
   }, [])
+  const toggleMostrarUSD = () => setMostrarUSD(v => {
+    const nuevo = !v
+    localStorage.setItem('caja-mostrar-usd', String(nuevo))
+    return nuevo
+  })
+
+  // TC actual desde bluelytics
+  useEffect(() => {
+    fetch('https://api.bluelytics.com.ar/v1/latest')
+      .then(r => r.json())
+      .then(d => {
+        const blue = d.blue
+        const oficial = d.oficial
+        const pb = Math.round((blue.value_buy + blue.value_sell) / 2)
+        const po = Math.round((oficial.value_buy + oficial.value_sell) / 2)
+        setTcHoy(pb)
+        setTcLabel(`$ ${pb.toLocaleString('es-AR')}`)
+        setTcOficial(po)
+        setTcOficialLabel(`$ ${po.toLocaleString('es-AR')}`)
+        setForm(f => ({ ...f, tc_blue: String(pb) }))
+      })
+      .catch(() => { setTcLabel('$ 1.395'); setTcOficialLabel('$ 1.400') })
+  }, [])
+
+  // Fetch TC histórico para movimientos sin tc_blue
+  useEffect(() => {
+    const sinTC = movimientosIniciales.filter(m => m.monto_ars && !m.tc_blue && !m.eliminado)
+    if (sinTC.length === 0) return
+
+    const fetchTCHistorico = async (fecha: string): Promise<number | null> => {
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(fecha + 'T12:00:00')
+        d.setDate(d.getDate() - i)
+        const day = d.toISOString().split('T')[0]
+        try {
+          const res = await fetch(`https://api.bluelytics.com.ar/v1/historical?day=${day}`)
+          if (!res.ok) continue
+          const data = await res.json()
+          if (data.blue?.value_buy && data.blue?.value_sell)
+            return Math.round((data.blue.value_buy + data.blue.value_sell) / 2)
+        } catch {}
+      }
+      return null
+    }
+
+    const actualizarTCs = async () => {
+      setCargandoTC(true)
+      const fechasUnicas = [...new Set(sinTC.map((m: any) => m.fecha as string))]
+      const tcPorFecha: Record<string, number> = {}
+
+      for (const fecha of fechasUnicas) {
+        const tc = await fetchTCHistorico(fecha)
+        if (tc) tcPorFecha[fecha] = tc
+      }
+
+      if (Object.keys(tcPorFecha).length === 0) { setCargandoTC(false); return }
+
+      // Actualizar DB por fecha
+      await Promise.all(
+        Object.entries(tcPorFecha).map(([fecha, tc]) =>
+          supabase.from('movimientos_caja')
+            .update({ tc_blue: tc })
+            .eq('fecha', fecha)
+            .is('tc_blue', null)
+            .not('monto_ars', 'is', null)
+        )
+      )
+
+      // Actualizar estado local
+      setMovimientos(ms => ms.map(m =>
+        (!m.tc_blue && m.monto_ars && tcPorFecha[m.fecha])
+          ? { ...m, tc_blue: tcPorFecha[m.fecha] }
+          : m
+      ))
+      setCargandoTC(false)
+    }
+
+    actualizarTCs()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (opPreseleccionada && ordenes.length > 0) aplicarOrden(opPreseleccionada, true)
@@ -85,7 +157,7 @@ export default function CajaClient({ cajas, movimientosIniciales, obraId, ordene
 
   const [form, setForm] = useState({
     fecha: new Date().toISOString().split('T')[0],
-    tipo: 'ingreso', concepto: '', contraparte: '', monto_ars: '', monto_usd: '',
+    tipo: 'ingreso', concepto: '', contraparte: '', monto_ars: '', monto_usd: '', tc_blue: '',
   })
 
   const [formCheque, setFormCheque] = useState({
@@ -132,7 +204,7 @@ export default function CajaClient({ cajas, movimientosIniciales, obraId, ordene
       contraparte: form.contraparte || null,
       monto_ars: form.monto_ars ? parseFloat(form.monto_ars) : null,
       monto_usd: form.monto_usd ? parseFloat(form.monto_usd) : null,
-      tc_blue: tcHoy, origen: 'manual',
+      tc_blue: form.tc_blue ? parseFloat(form.tc_blue) : tcHoy, origen: 'manual',
       orden_pago_id: ordenSeleccionada || null,
     }).select().single()
     if (error) { flash('❌ Error: ' + error.message) }
@@ -152,7 +224,7 @@ export default function CajaClient({ cajas, movimientosIniciales, obraId, ordene
           }
         }
       }
-      setForm({ fecha: new Date().toISOString().split('T')[0], tipo: 'ingreso', concepto: '', contraparte: '', monto_ars: '', monto_usd: '' })
+      setForm({ fecha: new Date().toISOString().split('T')[0], tipo: 'ingreso', concepto: '', contraparte: '', monto_ars: '', monto_usd: '', tc_blue: String(tcHoy) })
       setOrdenSeleccionada('')
       flash('✓ Movimiento registrado')
       setTab('movimientos')
@@ -281,11 +353,11 @@ export default function CajaClient({ cajas, movimientosIniciales, obraId, ordene
   const movsFiltrados = movimientos.filter(m => m.caja_id === cajaActiva)
   const ingresos = movsFiltrados.filter(m => m.tipo === 'ingreso').reduce((a, m) => a + (m.monto_ars || 0), 0)
   const egresos = movsFiltrados.filter(m => m.tipo === 'egreso').reduce((a, m) => a + (m.monto_ars || 0), 0)
-  const egresosUSD = movsFiltrados.filter(m => m.tipo === 'egreso').reduce((a, m) => {
-    if (m.monto_usd) return a + m.monto_usd
-    return a + (m.monto_ars || 0) / (m.tc_blue || tcHoy)
-  }, 0)
-  const fmtUSD = (n: number) => n.toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+  const toUSD = (m: any) => m.monto_usd ? m.monto_usd : (m.monto_ars || 0) / (m.tc_blue || tcHoy)
+  const ingresosUSD = movsFiltrados.filter(m => m.tipo === 'ingreso').reduce((a, m) => a + toUSD(m), 0)
+  const egresosUSD  = movsFiltrados.filter(m => m.tipo === 'egreso').reduce((a, m) => a + toUSD(m), 0)
+  const netoUSD = ingresosUSD - egresosUSD
+  const fmtUSD = (n: number) => n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
   const hoy = new Date(); hoy.setHours(0,0,0,0)
   const en7dias = new Date(hoy.getTime() + 7*24*60*60*1000)
@@ -572,21 +644,31 @@ export default function CajaClient({ cajas, movimientosIniciales, obraId, ordene
       )}
 
       {/* Tabs */}
-      <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: 24 }}>
-        {[
-          { key: 'movimientos', label: `Movimientos · ${movsFiltrados.length}` },
-          { key: 'nuevo', label: '＋ Nuevo movimiento' },
-          { key: 'cheques', label: `🏦 Cheques · ${cheques.filter(c => c.estado === 'emitido').length} emitidos` },
-          { key: 'nuevo_cheque', label: '＋ Nuevo cheque' },
-          { key: 'papelera', label: `🗑️ Papelera${totalPapelera > 0 ? ` · ${totalPapelera}` : ''}` },
-          { key: 'importar', label: '📥 Importar extracto' },
-        ].map(t => (
-          <div key={t.key} onClick={() => { setTab(t.key as any); if (t.key === 'papelera') cargarPapelera() }} style={{
-            padding: '10px 18px', fontSize: 13, fontWeight: 500, cursor: 'pointer',
-            color: tab === t.key ? (t.key === 'papelera' ? '#F87171' : '#F0C060') : 'var(--text-muted)',
-            borderBottom: `2px solid ${tab === t.key ? (t.key === 'papelera' ? '#F87171' : '#F0C060') : 'transparent'}`,
-          }}>{t.label}</div>
-        ))}
+      <div style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid var(--border)', marginBottom: 24 }}>
+        <div style={{ display: 'flex', flex: 1 }}>
+          {[
+            { key: 'movimientos', label: `Movimientos · ${movsFiltrados.length}` },
+            { key: 'nuevo', label: '＋ Nuevo movimiento' },
+            { key: 'cheques', label: `🏦 Cheques · ${cheques.filter(c => c.estado === 'emitido').length} emitidos` },
+            { key: 'nuevo_cheque', label: '＋ Nuevo cheque' },
+            { key: 'papelera', label: `🗑️ Papelera${totalPapelera > 0 ? ` · ${totalPapelera}` : ''}` },
+            { key: 'importar', label: '📥 Importar extracto' },
+          ].map(t => (
+            <div key={t.key} onClick={() => { setTab(t.key as any); if (t.key === 'papelera') cargarPapelera() }} style={{
+              padding: '10px 18px', fontSize: 13, fontWeight: 500, cursor: 'pointer',
+              color: tab === t.key ? (t.key === 'papelera' ? '#F87171' : '#F0C060') : 'var(--text-muted)',
+              borderBottom: `2px solid ${tab === t.key ? (t.key === 'papelera' ? '#F87171' : '#F0C060') : 'transparent'}`,
+            }}>{t.label}</div>
+          ))}
+        </div>
+        {/* Toggle TC/USD — siempre visible en el header */}
+        <button
+          onClick={toggleMostrarUSD}
+          style={{ marginRight: 2, marginBottom: -1, background: mostrarUSD ? 'rgba(96,165,250,0.15)' : 'transparent', border: `1px solid ${mostrarUSD ? '#60A5FA' : 'var(--border)'}`, borderRadius: 6, padding: '5px 12px', cursor: 'pointer', fontFamily: 'system-ui', fontSize: 11, fontWeight: 600, color: mostrarUSD ? '#60A5FA' : 'var(--text-muted)', whiteSpace: 'nowrap', letterSpacing: 0.3 }}
+          title="Mostrar/ocultar columnas TC Blue y equivalente USD"
+        >
+          {cargandoTC ? '⏳ TC...' : mostrarUSD ? '≈ Ocultar TC/USD' : '≈ TC / USD'}
+        </button>
       </div>
 
       {/* Movimientos */}
@@ -605,19 +687,18 @@ export default function CajaClient({ cajas, movimientosIniciales, obraId, ordene
                 </div>
               </div>
             ))}
-            <div style={{ background: 'var(--bg-card)', border: '1px solid rgba(96,165,250,0.4)', borderRadius: 8, padding: '12px 18px', minWidth: 140 }}>
-              <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1 }}>Egresos equiv. USD</div>
-              <div style={{ fontSize: 18, fontWeight: 700, fontFamily: 'monospace', color: '#60A5FA', marginTop: 4 }}>
-                USD {fmtUSD(egresosUSD)}
+            {mostrarUSD && (
+              <div style={{ background: 'var(--bg-card)', border: '1px solid rgba(96,165,250,0.4)', borderRadius: 8, padding: '12px 18px', minWidth: 180 }}>
+                <div style={{ fontSize: 10, color: '#60A5FA', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 }}>Equiv. USD</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <div style={{ fontSize: 12, fontFamily: 'monospace', color: '#4ADE80' }}>↑ {fmtUSD(ingresosUSD)}</div>
+                  <div style={{ fontSize: 12, fontFamily: 'monospace', color: '#F87171' }}>↓ {fmtUSD(egresosUSD)}</div>
+                  <div style={{ fontSize: 13, fontFamily: 'monospace', fontWeight: 700, color: netoUSD >= 0 ? '#4ADE80' : '#F87171', borderTop: '1px solid var(--border)', marginTop: 2, paddingTop: 2 }}>
+                    = {netoUSD >= 0 ? '' : '-'}USD {fmtUSD(Math.abs(netoUSD))}
+                  </div>
+                </div>
               </div>
-              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>al TC blue de cada mov.</div>
-            </div>
-            <button
-              onClick={() => setMostrarUSD(v => !v)}
-              style={{ background: mostrarUSD ? 'rgba(96,165,250,0.15)' : 'var(--bg-card)', border: `1px solid ${mostrarUSD ? '#60A5FA' : 'var(--border)'}`, borderRadius: 8, padding: '12px 16px', cursor: 'pointer', fontFamily: 'system-ui', fontSize: 12, color: mostrarUSD ? '#60A5FA' : 'var(--text-muted)', whiteSpace: 'nowrap' }}
-            >
-              {mostrarUSD ? '✓ Ocultar TC + USD' : '≈ Ver TC + USD'}
-            </button>
+            )}
           </div>
           <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -630,7 +711,7 @@ export default function CajaClient({ cajas, movimientosIniciales, obraId, ordene
               </thead>
               <tbody>
                 {movsFiltrados.length === 0 ? (
-                  <tr><td colSpan={6} style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>
+                  <tr><td colSpan={mostrarUSD ? 8 : 6} style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>
                     Sin movimientos. <span style={{ color: '#60A5FA', cursor: 'pointer' }} onClick={() => setTab('nuevo')}>Agregar el primero →</span>
                   </td></tr>
                 ) : movsFiltrados.map((m, i) => (
@@ -678,6 +759,22 @@ export default function CajaClient({ cajas, movimientosIniciales, obraId, ordene
                   </tr>
                 ))}
               </tbody>
+              {mostrarUSD && movsFiltrados.length > 0 && (
+                <tfoot>
+                  <tr style={{ background: 'rgba(96,165,250,0.06)', borderTop: '2px solid rgba(96,165,250,0.3)' }}>
+                    <td colSpan={5} style={{ padding: '8px 14px', fontSize: 11, color: '#60A5FA', fontWeight: 600, textAlign: 'right', letterSpacing: 0.5 }}>TOTALES USD EQUIVALENTE</td>
+                    <td style={{ padding: '8px 14px', fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace' }}>—</td>
+                    <td style={{ padding: '8px 14px', fontFamily: 'monospace', fontSize: 12 }}>
+                      <div style={{ color: '#4ADE80' }}>↑ {fmtUSD(ingresosUSD)}</div>
+                      <div style={{ color: '#F87171' }}>↓ {fmtUSD(egresosUSD)}</div>
+                      <div style={{ color: netoUSD >= 0 ? '#4ADE80' : '#F87171', fontWeight: 700, borderTop: '1px solid var(--border)', marginTop: 2, paddingTop: 2 }}>
+                        = {netoUSD >= 0 ? '' : '-'}{fmtUSD(Math.abs(netoUSD))}
+                      </div>
+                    </td>
+                    <td style={{ padding: '8px 14px' }} />
+                  </tr>
+                </tfoot>
+              )}
             </table>
           </div>
         </>
@@ -720,7 +817,7 @@ export default function CajaClient({ cajas, movimientosIniciales, obraId, ordene
             <label style={labelStyle}>Contraparte</label>
             <input type="text" value={form.contraparte} onChange={e => setForm(f => ({...f, contraparte: e.target.value}))} placeholder="ej: Sharon y Mati..." style={inputStyle}/>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 24 }}>
             <div>
               <label style={labelStyle}>Monto ARS $</label>
               <input type="number" value={form.monto_ars} onChange={e => setForm(f => ({...f, monto_ars: e.target.value}))} placeholder="0" style={inputStyle}/>
@@ -728,6 +825,10 @@ export default function CajaClient({ cajas, movimientosIniciales, obraId, ordene
             <div>
               <label style={labelStyle}>Monto USD (opcional)</label>
               <input type="number" value={form.monto_usd} onChange={e => setForm(f => ({...f, monto_usd: e.target.value}))} placeholder="0" style={inputStyle}/>
+            </div>
+            <div>
+              <label style={{ ...labelStyle, color: '#60A5FA' }}>TC Blue $ <span style={{ fontWeight: 400, fontSize: 10 }}>(editable)</span></label>
+              <input type="number" value={form.tc_blue} onChange={e => setForm(f => ({...f, tc_blue: e.target.value}))} placeholder={String(tcHoy)} style={{ ...inputStyle, borderColor: 'rgba(96,165,250,0.4)', color: '#60A5FA' }}/>
             </div>
           </div>
           <button onClick={guardarMovimiento} disabled={guardando} style={{ background: 'var(--accent)', color: 'var(--accent-contrast)', border: 'none', borderRadius: 6, padding: '10px 24px', fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: 'system-ui' }}>
