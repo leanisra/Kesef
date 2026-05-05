@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS suscripciones (
 );
 
 -- Historial de pagos
-CREATE TABLE IF NOT EXISTS pagos (
+CREATE TABLE IF NOT EXISTS suscripcion_pagos (
   id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   suscripcion_id   UUID REFERENCES suscripciones(id),
   monto_usd        NUMERIC,
@@ -111,7 +111,7 @@ ALTER TABLE planes           ENABLE ROW LEVEL SECURITY;
 ALTER TABLE organizaciones   ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_profiles    ENABLE ROW LEVEL SECURITY;
 ALTER TABLE suscripciones    ENABLE ROW LEVEL SECURITY;
-ALTER TABLE pagos            ENABLE ROW LEVEL SECURITY;
+ALTER TABLE suscripcion_pagos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE whitelist_admin  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE invitaciones     ENABLE ROW LEVEL SECURITY;
 
