@@ -31,6 +31,7 @@ export default function CajaClient({ cajas, movimientosIniciales, obraId, ordene
   const [ordenSeleccionada, setOrdenSeleccionada] = useState<string>(opPreseleccionada || '')
   const [tcHoy, setTcHoy] = useState<number>(1415)
   const [tcLabel, setTcLabel] = useState<string>('cargando...')
+  const [mostrarUSD, setMostrarUSD] = useState(false)
   const [filtroEstado, setFiltroEstado] = useState('todos')
   const [confirmCambio, setConfirmCambio] = useState<{id: string, estado: string}|null>(null)
 
@@ -51,16 +52,54 @@ export default function CajaClient({ cajas, movimientosIniciales, obraId, ordene
   const [importando, setImportando] = useState(false)
   const [importNombre, setImportNombre] = useState('')
 
+  // TC actual desde bluelytics (promedio compra+venta blue)
   useEffect(() => {
-    fetch('https://dolarapi.com/v1/dolares/blue')
+    fetch('https://api.bluelytics.com.ar/v1/latest')
       .then(r => r.json())
       .then(d => {
-        const promedio = Math.round((d.compra + d.venta) / 2)
-        setTcHoy(promedio)
-        setTcLabel(`$ ${promedio.toLocaleString('es-AR')}`)
+        const tc = Math.round((d.blue.value_buy + d.blue.value_sell) / 2)
+        setTcHoy(tc)
+        setTcLabel(`$ ${tc.toLocaleString('es-AR')}`)
+        setForm(f => ({ ...f, tc_blue: String(tc) }))
       })
       .catch(() => setTcLabel('$ 1.415'))
   }, [])
+
+  // Fetch TC histórico para movimientos con monto_ars pero sin tc_blue guardado
+  useEffect(() => {
+    const sinTC = movimientosIniciales.filter((m: any) => m.monto_ars && !m.tc_blue && !m.eliminado)
+    if (sinTC.length === 0) return
+    const fechas = [...new Set(sinTC.map((m: any) => m.fecha as string))]
+    const fetchDia = async (fecha: string): Promise<number | null> => {
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(fecha + 'T12:00:00'); d.setDate(d.getDate() - i)
+        const day = d.toISOString().split('T')[0]
+        try {
+          const r = await fetch(`https://api.bluelytics.com.ar/v1/historical?day=${day}`)
+          if (!r.ok) continue
+          const data = await r.json()
+          if (data.blue?.value_buy && data.blue?.value_sell)
+            return Math.round((data.blue.value_buy + data.blue.value_sell) / 2)
+        } catch { continue }
+      }
+      return null
+    }
+    ;(async () => {
+      const tcPorFecha: Record<string, number> = {}
+      for (const fecha of fechas) {
+        const tc = await fetchDia(fecha)
+        if (tc) tcPorFecha[fecha] = tc
+      }
+      if (!Object.keys(tcPorFecha).length) return
+      await Promise.all(Object.entries(tcPorFecha).map(([fecha, tc]) =>
+        supabase.from('movimientos_caja').update({ tc_blue: tc })
+          .eq('fecha', fecha).is('tc_blue', null).not('monto_ars', 'is', null)
+      ))
+      setMovimientos(ms => ms.map((m: any) =>
+        (!m.tc_blue && m.monto_ars && tcPorFecha[m.fecha]) ? { ...m, tc_blue: tcPorFecha[m.fecha] } : m
+      ))
+    })()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (opPreseleccionada && ordenes.length > 0) aplicarOrden(opPreseleccionada, true)
@@ -79,7 +118,7 @@ export default function CajaClient({ cajas, movimientosIniciales, obraId, ordene
 
   const [form, setForm] = useState({
     fecha: new Date().toISOString().split('T')[0],
-    tipo: 'ingreso', concepto: '', contraparte: '', monto_ars: '', monto_usd: '',
+    tipo: 'ingreso', concepto: '', contraparte: '', monto_ars: '', monto_usd: '', tc_blue: '',
   })
 
   const [formCheque, setFormCheque] = useState({
@@ -126,7 +165,7 @@ export default function CajaClient({ cajas, movimientosIniciales, obraId, ordene
       contraparte: form.contraparte || null,
       monto_ars: form.monto_ars ? parseFloat(form.monto_ars) : null,
       monto_usd: form.monto_usd ? parseFloat(form.monto_usd) : null,
-      tc_blue: tcHoy, origen: 'manual',
+      tc_blue: form.tc_blue ? parseFloat(form.tc_blue) : (tcHoy || null), origen: 'manual',
       orden_pago_id: ordenSeleccionada || null,
     }).select().single()
     if (error) { flash('❌ Error: ' + error.message) }
@@ -146,7 +185,7 @@ export default function CajaClient({ cajas, movimientosIniciales, obraId, ordene
           }
         }
       }
-      setForm({ fecha: new Date().toISOString().split('T')[0], tipo: 'ingreso', concepto: '', contraparte: '', monto_ars: '', monto_usd: '' })
+      setForm({ fecha: new Date().toISOString().split('T')[0], tipo: 'ingreso', concepto: '', contraparte: '', monto_ars: '', monto_usd: '', tc_blue: String(tcHoy) })
       setOrdenSeleccionada('')
       flash('✓ Movimiento registrado')
       setTab('movimientos')
@@ -591,18 +630,37 @@ export default function CajaClient({ cajas, movimientosIniciales, obraId, ordene
               </div>
             ))}
           </div>
+          {/* Toggle TC / USD */}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
+            <button
+              onClick={() => setMostrarUSD(v => !v)}
+              style={{
+                background: mostrarUSD ? 'rgba(96,165,250,0.12)' : 'var(--bg-card)',
+                border: `1px solid ${mostrarUSD ? '#60A5FA' : 'var(--border)'}`,
+                borderRadius: 8, padding: '7px 16px', cursor: 'pointer',
+                fontFamily: 'system-ui', fontSize: 13, fontWeight: 600,
+                color: mostrarUSD ? '#60A5FA' : 'var(--text-secondary)',
+                display: 'flex', alignItems: 'center', gap: 6, transition: 'all 0.15s',
+              }}
+            >
+              ≈ {mostrarUSD ? 'Ocultar TC / USD' : 'Ver TC / USD'}
+            </button>
+          </div>
+
           <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ background: 'var(--bg-table-head)' }}>
-                  {['Fecha','Concepto','Contraparte','Ingreso','Egreso',''].map(h => (
-                    <th key={h} style={{ padding: '9px 14px', textAlign: 'left', fontSize: 11, color: 'var(--text-muted)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: 0.5 }}>{h}</th>
+                  {['Fecha','Concepto','Contraparte','Ingreso','Egreso',
+                    ...(mostrarUSD ? ['TC Blue','≈ USD'] : []),
+                    ''].map(h => (
+                    <th key={h} style={{ padding: '9px 14px', textAlign: 'left', fontSize: 11, fontWeight: 500, textTransform: 'uppercase', letterSpacing: 0.5, color: (h === 'TC Blue' || h === '≈ USD') ? '#60A5FA' : 'var(--text-muted)' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {movsFiltrados.length === 0 ? (
-                  <tr><td colSpan={6} style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>
+                  <tr><td colSpan={mostrarUSD ? 8 : 6} style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>
                     Sin movimientos. <span style={{ color: '#60A5FA', cursor: 'pointer' }} onClick={() => setTab('nuevo')}>Agregar el primero →</span>
                   </td></tr>
                 ) : movsFiltrados.map((m, i) => (
@@ -615,6 +673,19 @@ export default function CajaClient({ cajas, movimientosIniciales, obraId, ordene
                     <td style={{ padding: '10px 14px', fontSize: 13, color: 'var(--text-secondary)' }}>{m.contraparte || '—'}</td>
                     <td style={{ padding: '10px 14px', fontFamily: 'monospace', color: '#4ADE80' }}>{m.tipo === 'ingreso' ? `$ ${fmt(m.monto_ars)}` : '—'}</td>
                     <td style={{ padding: '10px 14px', fontFamily: 'monospace', color: '#F87171' }}>{m.tipo === 'egreso' ? `$ ${fmt(m.monto_ars)}` : '—'}</td>
+                    {mostrarUSD && (() => {
+                      const tc = m.tc_blue || tcHoy
+                      const monto = m.monto_ars || 0
+                      const usd = m.monto_usd ? m.monto_usd : monto / tc
+                      return (<>
+                        <td style={{ padding: '10px 14px', fontFamily: 'monospace', fontSize: 12, color: 'var(--text-muted)' }}>
+                          {m.tc_blue ? `$${m.tc_blue.toLocaleString('es-AR')}` : <span style={{ color: '#F59E0B', fontSize: 11 }}>~hoy</span>}
+                        </td>
+                        <td style={{ padding: '10px 14px', fontFamily: 'monospace', fontSize: 12, color: '#60A5FA' }}>
+                          {(monto > 0 || m.monto_usd) ? `USD ${usd.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
+                        </td>
+                      </>)
+                    })()}
                     <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>
                       <button onClick={() => setEditandoMov({ ...m, monto_ars: m.monto_ars ? String(m.monto_ars) : '', monto_usd: m.monto_usd ? String(m.monto_usd) : '' })}
                         style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, marginRight: 4, opacity: 0.5 }} title="Editar">✏️</button>
@@ -674,7 +745,7 @@ export default function CajaClient({ cajas, movimientosIniciales, obraId, ordene
             <label style={labelStyle}>Contraparte</label>
             <input type="text" value={form.contraparte} onChange={e => setForm(f => ({...f, contraparte: e.target.value}))} placeholder="ej: Sharon y Mati..." style={inputStyle}/>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 24 }}>
             <div>
               <label style={labelStyle}>Monto ARS $</label>
               <input type="number" value={form.monto_ars} onChange={e => setForm(f => ({...f, monto_ars: e.target.value}))} placeholder="0" style={inputStyle}/>
@@ -682,6 +753,10 @@ export default function CajaClient({ cajas, movimientosIniciales, obraId, ordene
             <div>
               <label style={labelStyle}>Monto USD (opcional)</label>
               <input type="number" value={form.monto_usd} onChange={e => setForm(f => ({...f, monto_usd: e.target.value}))} placeholder="0" style={inputStyle}/>
+            </div>
+            <div>
+              <label style={{ ...labelStyle, color: '#60A5FA' }}>TC Blue <span style={{ fontWeight: 400 }}>(auto)</span></label>
+              <input type="number" value={form.tc_blue} onChange={e => setForm(f => ({...f, tc_blue: e.target.value}))} placeholder={String(tcHoy)} style={{ ...inputStyle, borderColor: 'rgba(96,165,250,0.35)', color: '#60A5FA' }}/>
             </div>
           </div>
           <button onClick={guardarMovimiento} disabled={guardando} style={{ background: 'var(--accent)', color: 'var(--accent-contrast)', border: 'none', borderRadius: 6, padding: '10px 24px', fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: 'system-ui' }}>
